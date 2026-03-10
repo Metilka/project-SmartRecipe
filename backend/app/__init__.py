@@ -9,10 +9,9 @@ def create_app():
     app.config.from_object(Config)
 
     db.init_app(app)
+    from app import models
 
     from .routes import main
     app.register_blueprint(main)
-
-    from . import models
 
     return app
