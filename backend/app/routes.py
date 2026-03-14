@@ -1,6 +1,8 @@
 from flask import Blueprint, jsonify, request
 from app.models import Recipe, RecipeNutrientsPer100g
 from app.services.recommendations import get_recommendations_for_user
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.models import User
 
 main = Blueprint("main", __name__)
 
@@ -59,3 +61,20 @@ def get_recipe_by_id(recipe_id: int):
             "sodium_mg": nutrients.sodium_mg if nutrients else None,
         }
     })
+    
+@main.route("/users/me")
+@jwt_required()
+def get_current_user():
+
+    user_id = int(get_jwt_identity())
+
+    user = User.query.get(user_id)
+
+    if not user:
+        return {"error": "User not found"}, 404
+
+    return {
+        "id": user.id,
+        "email": user.email,
+        "selected_diet_id": user.selected_diet_id
+    }
