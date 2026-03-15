@@ -1,0 +1,160 @@
+.hero-banner,
+.recipe-hero,
+.toolbar,
+.detail-columns,
+.card-list,
+.diet-grid {
+  display: flex;
+}
+
+.hero-banner {
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius-md);
+  background: rgba(248, 252, 255, 0.76);
+  border: 1px solid rgba(192, 214, 241, 0.82);
+}
+
+.hero-banner p {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-top: 0.35rem;
+}
+
+.diet-grid {
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.diet-grid > * {
+  flex: 1 1 240px;
+}
+
+.card-list {
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.card-list > * {
+  flex: 1 1 290px;
+}
+
+.toolbar {
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 1rem;
+  flex-wrap: wrap;
+}
+
+.toolbar--multi-line {
+  align-items: flex-start;
+}
+
+.toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.toolbar__group--stretch {
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.toolbar-pill {
+  min-width: 60px;
+  background: linear-gradient(180deg, rgba(148, 196, 255, 0.98), rgba(64, 130, 221, 0.95));
+  color: var(--text-inverse);
+}
+
+.toolbar-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.toolbar-copy span {
+  color: var(--text-muted);
+}
+
+.recipe-hero {
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-5);
+}
+
+.recipe-hero h1 {
+  font-size: clamp(1.6rem, 2.8vw, 2.35rem);
+  margin-bottom: 0.45rem;
+}
+
+.recipe-hero p {
+  max-width: 760px;
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+.recipe-diet-note,
+.recipe-score-box {
+  min-width: 220px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.recipe-diet-note span,
+.recipe-score-box small {
+  color: var(--text-muted);
+}
+
+.recipe-diet-note strong {
+  font-size: 1.2rem;
+}
+
+.recipe-hero--personal {
+  align-items: center;
+}
+
+.detail-columns {
+  gap: var(--space-5);
+  align-items: stretch;
+}
+
+.detail-columns > * {
+  flex: 1 1 0;
+}
+
+.detail-columns--stacked > * {
+  min-width: 0;
+}
+
+@media (max-width: 1040px) {
+  .detail-columns {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 820px) {
+  .hero-banner,
+  .recipe-hero,
+  .toolbar,
+  .toolbar__group--stretch {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .recipe-diet-note,
+  .recipe-score-box {
+    min-width: 0;
+  }
+
+  .card-list > *,
+  .diet-grid > * {
+    flex-basis: 100%;
+  }
+}
