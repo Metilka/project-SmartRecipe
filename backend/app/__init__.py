@@ -1,17 +1,22 @@
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
 from config import Config
+from app.extensions import db, bcrypt, jwt
 
-db = SQLAlchemy()
 
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
     db.init_app(app)
+    bcrypt.init_app(app)
+    jwt.init_app(app)
+
     from app import models
 
-    from .routes import main
+    from app.routes import main
     app.register_blueprint(main)
+
+    from app.auth.routes import auth
+    app.register_blueprint(auth)
 
     return app
