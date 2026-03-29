@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Qe9Xavcxl4QUxf2HvRwrpan7l38teE0h9667nKCPfAO06B7m1DjJ0EGVPqgsoAe
+\restrict inv2lF3n1xja42QeIwxfq8Rq5rlnSlYflepglDvd7cIhmvrbH8wvS2ge1fNOwk3
 
 -- Dumped from database version 18.1
 -- Dumped by pg_dump version 18.1
@@ -29,9 +29,9 @@ CREATE DATABASE med_diet_db WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_P
 
 ALTER DATABASE med_diet_db OWNER TO postgres;
 
-\unrestrict Qe9Xavcxl4QUxf2HvRwrpan7l38teE0h9667nKCPfAO06B7m1DjJ0EGVPqgsoAe
+\unrestrict inv2lF3n1xja42QeIwxfq8Rq5rlnSlYflepglDvd7cIhmvrbH8wvS2ge1fNOwk3
 \connect med_diet_db
-\restrict Qe9Xavcxl4QUxf2HvRwrpan7l38teE0h9667nKCPfAO06B7m1DjJ0EGVPqgsoAe
+\restrict inv2lF3n1xja42QeIwxfq8Rq5rlnSlYflepglDvd7cIhmvrbH8wvS2ge1fNOwk3
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -50,26 +50,14 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
--- Name: diet_allowed_products; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.diet_allowed_products (
-    diet_id integer NOT NULL,
-    product_id integer NOT NULL
-);
-
-
-ALTER TABLE public.diet_allowed_products OWNER TO postgres;
-
---
 -- Name: diet_cooking_method_restrictions; Type: TABLE; Schema: public; Owner: postgres
 --
 
 CREATE TABLE public.diet_cooking_method_restrictions (
     id integer NOT NULL,
-    diet_id integer,
-    cooking_method character varying(50),
-    status character varying(20),
+    diet_id integer NOT NULL,
+    cooking_method character varying(50) NOT NULL,
+    status character varying(20) NOT NULL,
     CONSTRAINT diet_cooking_method_restrictions_status_check CHECK (((status)::text = ANY ((ARRAY['allowed'::character varying, 'recommended'::character varying, 'forbidden'::character varying])::text[])))
 );
 
@@ -168,7 +156,7 @@ CREATE TABLE public.ingredients (
     is_spicy boolean DEFAULT false,
     is_acidic boolean DEFAULT false,
     is_saturated_fat boolean DEFAULT false,
-    product_id integer
+    product_id integer NOT NULL
 );
 
 
@@ -349,6 +337,42 @@ CREATE TABLE public.user_excluded_products (
 ALTER TABLE public.user_excluded_products OWNER TO postgres;
 
 --
+-- Name: user_favorite_products; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.user_favorite_products (
+    user_id integer NOT NULL,
+    product_id integer NOT NULL
+);
+
+
+ALTER TABLE public.user_favorite_products OWNER TO postgres;
+
+--
+-- Name: user_profiles; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.user_profiles (
+    user_id integer NOT NULL,
+    low_sodium boolean DEFAULT false NOT NULL,
+    low_sugar boolean DEFAULT false NOT NULL,
+    low_fat boolean DEFAULT false NOT NULL,
+    no_spicy boolean DEFAULT false NOT NULL,
+    no_acidic boolean DEFAULT false NOT NULL,
+    no_saturated_fat boolean DEFAULT false NOT NULL,
+    target_kcal double precision,
+    target_protein double precision,
+    target_fat double precision,
+    target_carbs double precision,
+    target_sugar double precision,
+    target_sodium_mg double precision,
+    reference_mass_g_per_day double precision DEFAULT 2000
+);
+
+
+ALTER TABLE public.user_profiles OWNER TO postgres;
+
+--
 -- Name: users; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -356,7 +380,7 @@ CREATE TABLE public.users (
     id integer NOT NULL,
     email character varying(150) NOT NULL,
     password_hash text NOT NULL,
-    selected_diet_id integer,
+    selected_diet_id integer NOT NULL,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -432,110 +456,6 @@ ALTER TABLE ONLY public.recipes ALTER COLUMN id SET DEFAULT nextval('public.reci
 --
 
 ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_id_seq'::regclass);
-
-
---
--- Data for Name: diet_allowed_products; Type: TABLE DATA; Schema: public; Owner: postgres
---
-
-INSERT INTO public.diet_allowed_products VALUES (1, 1);
-INSERT INTO public.diet_allowed_products VALUES (1, 3);
-INSERT INTO public.diet_allowed_products VALUES (1, 4);
-INSERT INTO public.diet_allowed_products VALUES (1, 5);
-INSERT INTO public.diet_allowed_products VALUES (1, 6);
-INSERT INTO public.diet_allowed_products VALUES (1, 7);
-INSERT INTO public.diet_allowed_products VALUES (1, 8);
-INSERT INTO public.diet_allowed_products VALUES (1, 9);
-INSERT INTO public.diet_allowed_products VALUES (1, 10);
-INSERT INTO public.diet_allowed_products VALUES (1, 11);
-INSERT INTO public.diet_allowed_products VALUES (1, 12);
-INSERT INTO public.diet_allowed_products VALUES (1, 13);
-INSERT INTO public.diet_allowed_products VALUES (1, 14);
-INSERT INTO public.diet_allowed_products VALUES (1, 15);
-INSERT INTO public.diet_allowed_products VALUES (1, 16);
-INSERT INTO public.diet_allowed_products VALUES (1, 17);
-INSERT INTO public.diet_allowed_products VALUES (1, 18);
-INSERT INTO public.diet_allowed_products VALUES (1, 19);
-INSERT INTO public.diet_allowed_products VALUES (1, 20);
-INSERT INTO public.diet_allowed_products VALUES (2, 1);
-INSERT INTO public.diet_allowed_products VALUES (2, 2);
-INSERT INTO public.diet_allowed_products VALUES (2, 3);
-INSERT INTO public.diet_allowed_products VALUES (2, 4);
-INSERT INTO public.diet_allowed_products VALUES (2, 5);
-INSERT INTO public.diet_allowed_products VALUES (2, 6);
-INSERT INTO public.diet_allowed_products VALUES (2, 7);
-INSERT INTO public.diet_allowed_products VALUES (2, 8);
-INSERT INTO public.diet_allowed_products VALUES (2, 9);
-INSERT INTO public.diet_allowed_products VALUES (2, 10);
-INSERT INTO public.diet_allowed_products VALUES (2, 11);
-INSERT INTO public.diet_allowed_products VALUES (2, 12);
-INSERT INTO public.diet_allowed_products VALUES (2, 13);
-INSERT INTO public.diet_allowed_products VALUES (2, 14);
-INSERT INTO public.diet_allowed_products VALUES (2, 15);
-INSERT INTO public.diet_allowed_products VALUES (2, 16);
-INSERT INTO public.diet_allowed_products VALUES (2, 17);
-INSERT INTO public.diet_allowed_products VALUES (2, 18);
-INSERT INTO public.diet_allowed_products VALUES (2, 19);
-INSERT INTO public.diet_allowed_products VALUES (2, 20);
-INSERT INTO public.diet_allowed_products VALUES (3, 1);
-INSERT INTO public.diet_allowed_products VALUES (3, 2);
-INSERT INTO public.diet_allowed_products VALUES (3, 3);
-INSERT INTO public.diet_allowed_products VALUES (3, 4);
-INSERT INTO public.diet_allowed_products VALUES (3, 5);
-INSERT INTO public.diet_allowed_products VALUES (3, 6);
-INSERT INTO public.diet_allowed_products VALUES (3, 7);
-INSERT INTO public.diet_allowed_products VALUES (3, 8);
-INSERT INTO public.diet_allowed_products VALUES (3, 9);
-INSERT INTO public.diet_allowed_products VALUES (3, 10);
-INSERT INTO public.diet_allowed_products VALUES (3, 11);
-INSERT INTO public.diet_allowed_products VALUES (3, 12);
-INSERT INTO public.diet_allowed_products VALUES (3, 14);
-INSERT INTO public.diet_allowed_products VALUES (3, 15);
-INSERT INTO public.diet_allowed_products VALUES (3, 16);
-INSERT INTO public.diet_allowed_products VALUES (3, 17);
-INSERT INTO public.diet_allowed_products VALUES (3, 18);
-INSERT INTO public.diet_allowed_products VALUES (3, 19);
-INSERT INTO public.diet_allowed_products VALUES (3, 20);
-INSERT INTO public.diet_allowed_products VALUES (4, 1);
-INSERT INTO public.diet_allowed_products VALUES (4, 2);
-INSERT INTO public.diet_allowed_products VALUES (4, 3);
-INSERT INTO public.diet_allowed_products VALUES (4, 4);
-INSERT INTO public.diet_allowed_products VALUES (4, 5);
-INSERT INTO public.diet_allowed_products VALUES (4, 6);
-INSERT INTO public.diet_allowed_products VALUES (4, 7);
-INSERT INTO public.diet_allowed_products VALUES (4, 8);
-INSERT INTO public.diet_allowed_products VALUES (4, 9);
-INSERT INTO public.diet_allowed_products VALUES (4, 10);
-INSERT INTO public.diet_allowed_products VALUES (4, 11);
-INSERT INTO public.diet_allowed_products VALUES (4, 12);
-INSERT INTO public.diet_allowed_products VALUES (4, 13);
-INSERT INTO public.diet_allowed_products VALUES (4, 14);
-INSERT INTO public.diet_allowed_products VALUES (4, 15);
-INSERT INTO public.diet_allowed_products VALUES (4, 16);
-INSERT INTO public.diet_allowed_products VALUES (4, 17);
-INSERT INTO public.diet_allowed_products VALUES (4, 18);
-INSERT INTO public.diet_allowed_products VALUES (4, 19);
-INSERT INTO public.diet_allowed_products VALUES (4, 20);
-INSERT INTO public.diet_allowed_products VALUES (5, 1);
-INSERT INTO public.diet_allowed_products VALUES (5, 2);
-INSERT INTO public.diet_allowed_products VALUES (5, 3);
-INSERT INTO public.diet_allowed_products VALUES (5, 4);
-INSERT INTO public.diet_allowed_products VALUES (5, 5);
-INSERT INTO public.diet_allowed_products VALUES (5, 6);
-INSERT INTO public.diet_allowed_products VALUES (5, 7);
-INSERT INTO public.diet_allowed_products VALUES (5, 8);
-INSERT INTO public.diet_allowed_products VALUES (5, 9);
-INSERT INTO public.diet_allowed_products VALUES (5, 10);
-INSERT INTO public.diet_allowed_products VALUES (5, 11);
-INSERT INTO public.diet_allowed_products VALUES (5, 12);
-INSERT INTO public.diet_allowed_products VALUES (5, 13);
-INSERT INTO public.diet_allowed_products VALUES (5, 14);
-INSERT INTO public.diet_allowed_products VALUES (5, 15);
-INSERT INTO public.diet_allowed_products VALUES (5, 16);
-INSERT INTO public.diet_allowed_products VALUES (5, 17);
-INSERT INTO public.diet_allowed_products VALUES (5, 18);
-INSERT INTO public.diet_allowed_products VALUES (5, 19);
-INSERT INTO public.diet_allowed_products VALUES (5, 20);
 
 
 --
@@ -653,17 +573,17 @@ INSERT INTO public.recipe_nutrients_per_100g VALUES (1, 200, 17, 1.9333333333333
 -- Data for Name: recipes; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-INSERT INTO public.recipes VALUES (1, 'Отварная курица с рисом', 'Щадящее блюдо для ЖКТ', 'варка', 40, 2, '1. Промойте рис в холодной воде до прозрачности. Залейте 1 стаканом воды, добавьте щепотку соли и варите на медленном огне 20 минут до готовности. 
-2. Куриное филе промойте, залейте холодной водой, доведите до кипения, снимите пену. Варите 20-25 минут до готовности. 
-3. Готовую курицу нарежьте небольшими кусочками. Подавайте рис с курицей без добавления специй.');
-INSERT INTO public.recipes VALUES (2, 'Гречка с тушёной говядиной', 'Питательное блюдо', 'тушение', 60, 2, '1. Гречку переберите, промойте, залейте водой (соотношение гречки и воды - 1 к 2), добавьте щепотку соли. Варите 20-25 минут до полного впитывания воды. 
-2. Говядину нарежьте небольшими кубиками, обжарьте на антипригарной сковороде 20 минут. 
-3. Добавьте к мясу 1 мелко нарезанную луковицу, обжаривайте ещё 3-4 минуты. Залейте горячей водой, накройте крышкой и тушите на медленном огне 30-40 минут до мягкости мяса. 
-4. Смешайте готовую гречку с тушёной говядиной, дайте настояться под крышкой 5-10 минут перед подачей.');
 INSERT INTO public.recipes VALUES (3, 'Омлет с брокколи', 'Белковый завтрак', 'жарка', 15, 1, '1. Брокколи отварите до готовности. 
 2. В миске взбейте 2 яйца, добавьте щепотку соли. 
 3. Разогрейте сковороду, затем выложите брокколи, залейте яичной смесью. 
 4. Готовьте на слабом огне под крышкой 5-7 минут до полного застывания яиц. Подавайте горячим, посыпав зеленью по желанию.');
+INSERT INTO public.recipes VALUES (1, 'Отварная курица с рисом', 'Щадящее блюдо для ЖКТ', 'варка', 40, 1, '1. Промойте рис в холодной воде до прозрачности. Залейте 1 стаканом воды, добавьте щепотку соли и варите на медленном огне 20 минут до готовности. 
+2. Куриное филе промойте, залейте холодной водой, доведите до кипения, снимите пену. Варите 20-25 минут до готовности. 
+3. Готовую курицу нарежьте небольшими кусочками. Подавайте рис с курицей без добавления специй.');
+INSERT INTO public.recipes VALUES (2, 'Гречка с тушёной говядиной', 'Питательное блюдо', 'тушение', 60, 1, '1. Гречку переберите, промойте, залейте водой (соотношение гречки и воды - 1 к 2), добавьте щепотку соли. Варите 20-25 минут до полного впитывания воды. 
+2. Говядину нарежьте небольшими кубиками, обжарьте на антипригарной сковороде 20 минут. 
+3. Добавьте к мясу 1 мелко нарезанную луковицу, обжаривайте ещё 3-4 минуты. Залейте горячей водой, накройте крышкой и тушите на медленном огне 30-40 минут до мягкости мяса. 
+4. Смешайте готовую гречку с тушёной говядиной, дайте настояться под крышкой 5-10 минут перед подачей.');
 
 
 --
@@ -674,10 +594,26 @@ INSERT INTO public.user_excluded_products VALUES (1, 10);
 
 
 --
+-- Data for Name: user_favorite_products; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+INSERT INTO public.user_favorite_products VALUES (1, 15);
+INSERT INTO public.user_favorite_products VALUES (1, 11);
+INSERT INTO public.user_favorite_products VALUES (1, 18);
+
+
+--
+-- Data for Name: user_profiles; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+INSERT INTO public.user_profiles VALUES (1, false, false, false, false, false, false, 2000, 90, 70, 200, 25, NULL, 2000);
+
+
+--
 -- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-INSERT INTO public.users VALUES (1, 'testuser@mail.com', 'hashed_password_example', 3, '2026-02-24 21:38:18.655125');
+INSERT INTO public.users VALUES (1, 'testuser@mail.com', 'hashed_password_example', 5, '2026-02-24 21:38:18.655125');
 
 
 --
@@ -730,11 +666,11 @@ SELECT pg_catalog.setval('public.users_id_seq', 1, true);
 
 
 --
--- Name: diet_allowed_products diet_allowed_products_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: diet_cooking_method_restrictions diet_cooking_method_restrictions_diet_method_uk; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.diet_allowed_products
-    ADD CONSTRAINT diet_allowed_products_pkey PRIMARY KEY (diet_id, product_id);
+ALTER TABLE ONLY public.diet_cooking_method_restrictions
+    ADD CONSTRAINT diet_cooking_method_restrictions_diet_method_uk UNIQUE (diet_id, cooking_method);
 
 
 --
@@ -834,6 +770,22 @@ ALTER TABLE ONLY public.user_excluded_products
 
 
 --
+-- Name: user_favorite_products user_favorite_products_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.user_favorite_products
+    ADD CONSTRAINT user_favorite_products_pkey PRIMARY KEY (user_id, product_id);
+
+
+--
+-- Name: user_profiles user_profiles_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.user_profiles
+    ADD CONSTRAINT user_profiles_pkey PRIMARY KEY (user_id);
+
+
+--
 -- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -878,19 +830,10 @@ CREATE INDEX idx_user_excluded_products ON public.user_excluded_products USING b
 
 
 --
--- Name: diet_allowed_products diet_allowed_products_diet_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: idx_user_favorite_products; Type: INDEX; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.diet_allowed_products
-    ADD CONSTRAINT diet_allowed_products_diet_id_fkey FOREIGN KEY (diet_id) REFERENCES public.diets(id) ON DELETE CASCADE;
-
-
---
--- Name: diet_allowed_products diet_allowed_products_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.diet_allowed_products
-    ADD CONSTRAINT diet_allowed_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE CASCADE;
+CREATE INDEX idx_user_favorite_products ON public.user_favorite_products USING btree (user_id, product_id);
 
 
 --
@@ -982,16 +925,40 @@ ALTER TABLE ONLY public.user_excluded_products
 
 
 --
+-- Name: user_favorite_products user_favorite_products_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.user_favorite_products
+    ADD CONSTRAINT user_favorite_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_favorite_products user_favorite_products_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.user_favorite_products
+    ADD CONSTRAINT user_favorite_products_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_profiles user_profiles_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.user_profiles
+    ADD CONSTRAINT user_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
 -- Name: users users_selected_diet_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.users
-    ADD CONSTRAINT users_selected_diet_id_fkey FOREIGN KEY (selected_diet_id) REFERENCES public.diets(id) ON DELETE SET NULL;
+    ADD CONSTRAINT users_selected_diet_id_fkey FOREIGN KEY (selected_diet_id) REFERENCES public.diets(id) ON DELETE RESTRICT;
 
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Qe9Xavcxl4QUxf2HvRwrpan7l38teE0h9667nKCPfAO06B7m1DjJ0EGVPqgsoAe
+\unrestrict inv2lF3n1xja42QeIwxfq8Rq5rlnSlYflepglDvd7cIhmvrbH8wvS2ge1fNOwk3
 
