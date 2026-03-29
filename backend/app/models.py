@@ -1,4 +1,7 @@
+from datetime import datetime
+
 from app.extensions import db
+
 
 class Diet(db.Model):
     __tablename__ = "diets"
@@ -18,10 +21,47 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.Text, nullable=False)
-    selected_diet_id = db.Column(db.Integer, db.ForeignKey("diets.id"), nullable=True)
-    created_at = db.Column(db.DateTime)
+    selected_diet_id = db.Column(db.Integer, db.ForeignKey("diets.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     selected_diet = db.relationship("Diet")
+    profile = db.relationship(
+        "UserProfile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+    excluded_products = db.relationship(
+        "UserExcludedProduct",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    favorite_products = db.relationship(
+        "UserFavoriteProduct",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+class UserProfile(db.Model):
+    __tablename__ = "user_profiles"
+
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True)
+    low_sodium = db.Column(db.Boolean, nullable=False, default=False)
+    low_sugar = db.Column(db.Boolean, nullable=False, default=False)
+    low_fat = db.Column(db.Boolean, nullable=False, default=False)
+    no_spicy = db.Column(db.Boolean, nullable=False, default=False)
+    no_acidic = db.Column(db.Boolean, nullable=False, default=False)
+    no_saturated_fat = db.Column(db.Boolean, nullable=False, default=False)
+    target_kcal = db.Column(db.Float)
+    target_protein = db.Column(db.Float)
+    target_fat = db.Column(db.Float)
+    target_carbs = db.Column(db.Float)
+    target_sugar = db.Column(db.Float)
+    target_sodium_mg = db.Column(db.Float)
+    reference_mass_g_per_day = db.Column(db.Float, default=2000)
+
+    user = db.relationship("User", back_populates="profile")
 
 
 class Product(db.Model):
@@ -47,7 +87,7 @@ class Ingredient(db.Model):
     is_spicy = db.Column(db.Boolean, default=False)
     is_acidic = db.Column(db.Boolean, default=False)
     is_saturated_fat = db.Column(db.Boolean, default=False)
-    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False)
 
     product = db.relationship("Product")
 
@@ -63,7 +103,11 @@ class Recipe(db.Model):
     servings = db.Column(db.Integer)
     instructions = db.Column(db.Text)
 
-    nutrients = db.relationship("RecipeNutrientsPer100g", uselist=False, back_populates="recipe")
+    nutrients = db.relationship(
+        "RecipeNutrientsPer100g",
+        uselist=False,
+        back_populates="recipe",
+    )
 
 
 class RecipeIngredient(db.Model):
@@ -82,7 +126,7 @@ class RecipeIngredient(db.Model):
         db.UniqueConstraint(
             "recipe_id",
             "ingredient_id",
-            name="recipe_ingredients_recipe_id_ingredient_id_uk"
+            name="recipe_ingredients_recipe_id_ingredient_id_uk",
         ),
     )
 
@@ -115,10 +159,10 @@ class UserExcludedProduct(db.Model):
     product_id = db.Column(db.Integer, db.ForeignKey("products.id"), primary_key=True)
 
 
-class DietAllowedProduct(db.Model):
-    __tablename__ = "diet_allowed_products"
+class UserFavoriteProduct(db.Model):
+    __tablename__ = "user_favorite_products"
 
-    diet_id = db.Column(db.Integer, db.ForeignKey("diets.id"), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True)
     product_id = db.Column(db.Integer, db.ForeignKey("products.id"), primary_key=True)
 
 
