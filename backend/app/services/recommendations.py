@@ -1,6 +1,7 @@
 from app import db
 from app.models import (
-    DietCookingMethodRestriction,
+    DietHardCookingBan,
+    DietHardProductBan,
     DietProductRule,
     Ingredient,
     Recipe,
@@ -119,20 +120,14 @@ def get_recommendations_for_user(user_id: int, limit: int = 20):
             "invalid_product_ids": sorted(invalid_excluded),
         }, 400
 
-    forbidden_products_subquery = (
-        db.select(DietProductRule.product_id)
-        .where(
-            DietProductRule.diet_id == diet_id,
-            DietProductRule.status == "forbidden",
-        )
+    hard_banned_products_subquery = (
+        db.select(DietHardProductBan.product_id)
+        .where(DietHardProductBan.diet_id == diet_id)
     )
 
-    forbidden_methods_subquery = (
-        db.select(DietCookingMethodRestriction.cooking_method)
-        .where(
-            DietCookingMethodRestriction.diet_id == diet_id,
-            DietCookingMethodRestriction.status == "forbidden",
-        )
+    hard_banned_methods_subquery = (
+        db.select(DietHardCookingBan.cooking_method)
+        .where(DietHardCookingBan.diet_id == diet_id)
     )
 
     query = (
@@ -143,7 +138,7 @@ def get_recommendations_for_user(user_id: int, limit: int = 20):
             RecipeNutrientsPer100g.recipe_id == Recipe.id,
         )
         .filter(RecipeDiet.diet_id == diet_id)
-        .filter(~Recipe.cooking_method.in_(forbidden_methods_subquery))
+        .filter(~Recipe.cooking_method.in_(hard_banned_methods_subquery))
         .filter(
             ~db.exists().where(
                 (RecipeIngredient.recipe_id == Recipe.id)
@@ -155,7 +150,7 @@ def get_recommendations_for_user(user_id: int, limit: int = 20):
             ~db.exists().where(
                 (RecipeIngredient.recipe_id == Recipe.id)
                 & (RecipeIngredient.ingredient_id == Ingredient.id)
-                & (Ingredient.product_id.in_(forbidden_products_subquery))
+                & (Ingredient.product_id.in_(hard_banned_products_subquery))
             )
         )
         .order_by(Recipe.id.asc())

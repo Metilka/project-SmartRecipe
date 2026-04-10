@@ -181,3 +181,19 @@ class DietCookingMethodRestriction(db.Model):
     diet_id = db.Column(db.Integer, db.ForeignKey("diets.id"))
     cooking_method = db.Column(db.String(50))
     status = db.Column(db.String(20), nullable=False)
+
+
+class DietHardProductBan(db.Model):
+    __tablename__ = "diet_hard_product_bans"
+
+    diet_id = db.Column(db.Integer, db.ForeignKey("diets.id"), primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), primary_key=True)
+    reason = db.Column(db.Text)
+
+
+class DietHardCookingBan(db.Model):
+    __tablename__ = "diet_hard_cooking_bans"
+
+    diet_id = db.Column(db.Integer, db.ForeignKey("diets.id"), primary_key=True)
+    cooking_method = db.Column(db.String(50), primary_key=True)
+    reason = db.Column(db.Text)

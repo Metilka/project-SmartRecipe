@@ -15,6 +15,12 @@ MEDICAL_LIMITS_PER_100G = {
     "low_fat": {"fat": 10.0},
 }
 
+INGREDIENT_RULE_WEIGHTS = {
+    "recommended": 1.0,
+    "allowed": 0.7,
+    "forbidden": 0.3,
+}
+
 
 def clamp01(value):
     return max(0.0, min(1.0, value))
@@ -89,8 +95,8 @@ def calculate_ingredient_score(recipe_id, diet_id):
     if not ingredients:
         return 0.0
 
-    score = 0.0
-    total = len(ingredients)
+    weighted_score = 0.0
+    total_weight = 0.0
 
     for ri in ingredients:
         product_id = ri.ingredient.product_id
@@ -100,15 +106,19 @@ def calculate_ingredient_score(recipe_id, diet_id):
         ).first()
 
         if not rule:
-            score += 0.7
-        elif rule.status == "recommended":
-            score += 1.0
-        elif rule.status == "allowed":
-            score += 0.7
+            coeff = 0.7
         else:
-            score += 0.0
+            coeff = INGREDIENT_RULE_WEIGHTS.get(rule.status, 0.7)
 
-    return clamp01(score / total)
+        weight = ri.quantity if ri.quantity and ri.quantity > 0 else 1.0
+
+        weighted_score += coeff * weight
+        total_weight += weight
+
+    if total_weight <= 0:
+        return 0.0
+
+    return round(clamp01(weighted_score / total_weight), 4)
 
 
 def calculate_nutrient_score(recipe_id, user):
