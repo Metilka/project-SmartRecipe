@@ -5,3 +5,5 @@ from flask_jwt_extended import JWTManager
 db = SQLAlchemy()
 bcrypt = Bcrypt()
 jwt = JWTManager()
+
+jwt_blocklist = set()
