@@ -9,6 +9,9 @@ from app.models import (
     Recipe,
     RecipeDiet,
     RecipeIngredient,
+    DietHardProductBan,
+    DietProductRule,
+    DietHardCookingBan,
     RecipeNutrientsPer100g,
     User,
     UserExcludedProduct,
@@ -135,28 +138,48 @@ def guest_feed():
 @main.route("/recipes")
 def get_recipes():
     diet_id = request.args.get("diet_id", type=int)
+    search = request.args.get("search", type=str)
+    cooking_method = request.args.get("cooking_method", type=str)
+    max_cooking_time = request.args.get("max_cooking_time", type=int)
+    page = request.args.get("page", default=1, type=int)
+    per_page = request.args.get("per_page", default=10, type=int)
 
     query = db.session.query(Recipe)
+
     if diet_id:
         query = (
             query.join(RecipeDiet, RecipeDiet.recipe_id == Recipe.id)
             .filter(RecipeDiet.diet_id == diet_id)
         )
 
-    recipes = query.order_by(Recipe.id.asc()).all()
+    if search:
+        query = query.filter(Recipe.title.ilike(f"%{search}%"))
 
-    return jsonify(
-        [
+    if cooking_method:
+        query = query.filter(Recipe.cooking_method == cooking_method)
+
+    if max_cooking_time:
+        query = query.filter(Recipe.cooking_time <= max_cooking_time)
+
+    total = query.count()
+    recipes = query.order_by(Recipe.id.asc()).offset((page - 1) * per_page).limit(per_page).all()
+
+    return jsonify({
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": (total + per_page - 1) // per_page,
+        "recipes": [
             {
                 "id": recipe.id,
                 "title": recipe.title,
                 "cooking_method": recipe.cooking_method,
+                "cooking_time": recipe.cooking_time,
                 "description": recipe.description,
             }
             for recipe in recipes
         ]
-    )
-
+    })
 
 @main.route("/recipes/<int:recipe_id>")
 def get_recipe_by_id(recipe_id: int):
@@ -243,12 +266,48 @@ def select_diet():
     user.selected_diet_id = diet_id
     db.session.commit()
 
-    return jsonify(
-        {
-            "message": "Diet selected",
-            "diet_id": diet_id,
-        }
+    banned_products = (
+        db.session.query(Product)
+        .join(DietHardProductBan, DietHardProductBan.product_id == Product.id)
+        .filter(DietHardProductBan.diet_id == diet_id)
+        .all()
     )
+
+    banned_methods = (
+        db.session.query(DietHardCookingBan)
+        .filter(DietHardCookingBan.diet_id == diet_id)
+        .all()
+    )
+
+    soft_forbidden_products = (
+        db.session.query(Product)
+        .join(DietProductRule, DietProductRule.product_id == Product.id)
+        .filter(
+            DietProductRule.diet_id == diet_id,
+            DietProductRule.status == "forbidden",
+        )
+        .all()
+    )
+
+    return jsonify({
+        "message": "Diet selected",
+        "diet_id": diet_id,
+        "diet_name": diet.name,
+        "restrictions": {
+            "hard_banned_products": [
+                {"product_id": p.id, "name": p.name, "category": p.category}
+                for p in banned_products
+            ],
+            "hard_banned_cooking_methods": [
+                {"cooking_method": b.cooking_method, "reason": b.reason}
+                for b in banned_methods
+            ],
+            "soft_forbidden_products": [
+                {"product_id": p.id, "name": p.name, "category": p.category}
+                for p in soft_forbidden_products
+            ],
+        }
+    })
 
 
 # -------------------- PROFILE --------------------
