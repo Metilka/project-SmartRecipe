@@ -1,15 +1,14 @@
 from app import db
 from app.models import (
-    DietHardCookingBan,
-    DietHardProductBan,
+    DietCookingMethodRestriction,
     DietProductRule,
-    Ingredient,
+    Product,
     Recipe,
     RecipeDiet,
     RecipeIngredient,
     RecipeNutrientsPer100g,
     User,
-    UserExcludedProduct,
+    UserProductPreference,
 )
 from app.services.scoring import (
     MEDICAL_LIMITS_PER_100G,
@@ -44,41 +43,41 @@ def get_hard_filter_reasons(user, recipe, nutrients):
     if profile.no_spicy:
         spicy_exists = (
             db.session.query(RecipeIngredient.id)
-            .join(Ingredient, Ingredient.id == RecipeIngredient.ingredient_id)
+            .join(Product, Product.id == RecipeIngredient.product_id)
             .filter(
                 RecipeIngredient.recipe_id == recipe.id,
-                Ingredient.is_spicy.is_(True),
+                Product.is_spicy.is_(True),
             )
             .first()
         )
         if spicy_exists:
-            reasons.append("contains_spicy_ingredient")
+            reasons.append("contains_spicy_product")
 
     if profile.no_acidic:
         acidic_exists = (
             db.session.query(RecipeIngredient.id)
-            .join(Ingredient, Ingredient.id == RecipeIngredient.ingredient_id)
+            .join(Product, Product.id == RecipeIngredient.product_id)
             .filter(
                 RecipeIngredient.recipe_id == recipe.id,
-                Ingredient.is_acidic.is_(True),
+                Product.is_acidic.is_(True),
             )
             .first()
         )
         if acidic_exists:
-            reasons.append("contains_acidic_ingredient")
+            reasons.append("contains_acidic_product")
 
     if profile.no_saturated_fat:
         sat_exists = (
             db.session.query(RecipeIngredient.id)
-            .join(Ingredient, Ingredient.id == RecipeIngredient.ingredient_id)
+            .join(Product, Product.id == RecipeIngredient.product_id)
             .filter(
                 RecipeIngredient.recipe_id == recipe.id,
-                Ingredient.is_saturated_fat.is_(True),
+                Product.is_saturated_fat.is_(True),
             )
             .first()
         )
         if sat_exists:
-            reasons.append("contains_saturated_fat_ingredient")
+            reasons.append("contains_saturated_fat_product")
 
     if nutrients:
         for flag_name, limits in MEDICAL_LIMITS_PER_100G.items():
@@ -108,8 +107,11 @@ def get_recommendations_for_user(user_id: int, limit: int = 20):
 
     excluded_product_ids = {
         row[0]
-        for row in db.session.query(UserExcludedProduct.product_id)
-        .filter(UserExcludedProduct.user_id == user_id)
+        for row in db.session.query(UserProductPreference.product_id)
+        .filter(
+            UserProductPreference.user_id == user_id,
+            UserProductPreference.preference_type == "excluded",
+        )
         .all()
     }
 
@@ -121,13 +123,21 @@ def get_recommendations_for_user(user_id: int, limit: int = 20):
         }, 400
 
     hard_banned_products_subquery = (
-        db.select(DietHardProductBan.product_id)
-        .where(DietHardProductBan.diet_id == diet_id)
+        db.select(DietProductRule.product_id)
+        .where(
+            DietProductRule.diet_id == diet_id,
+            DietProductRule.status == "forbidden",
+            DietProductRule.is_hard.is_(True),
+        )
     )
 
     hard_banned_methods_subquery = (
-        db.select(DietHardCookingBan.cooking_method)
-        .where(DietHardCookingBan.diet_id == diet_id)
+        db.select(DietCookingMethodRestriction.cooking_method)
+        .where(
+            DietCookingMethodRestriction.diet_id == diet_id,
+            DietCookingMethodRestriction.status == "forbidden",
+            DietCookingMethodRestriction.is_hard.is_(True),
+        )
     )
 
     query = (
@@ -142,20 +152,19 @@ def get_recommendations_for_user(user_id: int, limit: int = 20):
         .filter(
             ~db.exists().where(
                 (RecipeIngredient.recipe_id == Recipe.id)
-                & (RecipeIngredient.ingredient_id == Ingredient.id)
-                & (Ingredient.product_id.in_(excluded_product_ids))
+                & (RecipeIngredient.product_id.in_(excluded_product_ids))
             )
         )
         .filter(
             ~db.exists().where(
                 (RecipeIngredient.recipe_id == Recipe.id)
-                & (RecipeIngredient.ingredient_id == Ingredient.id)
-                & (Ingredient.product_id.in_(hard_banned_products_subquery))
+                & (RecipeIngredient.product_id.in_(hard_banned_products_subquery))
             )
         )
         .order_by(Recipe.id.asc())
     )
 
+    effective_targets = build_effective_targets(user, user.selected_diet)
     recipes = []
 
     for recipe, nutrients in query.all():
@@ -173,8 +182,6 @@ def get_recommendations_for_user(user_id: int, limit: int = 20):
             cooking_method_score,
             personal_score,
         )
-
-        effective_targets = build_effective_targets(user, user.selected_diet)
 
         recipes.append(
             {

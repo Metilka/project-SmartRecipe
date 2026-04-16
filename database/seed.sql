@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict E5vHl28Nft1cIohvbH7EHpgSDooh66oY0ytcAgwNgOvnZKvacc6R2eleeotBGjy
+\restrict hqKrfk5gBalpmH1LtOyG7osBa5iGJwCS89hDm1dAr1ScqSrTQ8FQ6tf9JpZHlco
 
 -- Dumped from database version 18.1
 -- Dumped by pg_dump version 18.1
@@ -29,9 +29,9 @@ CREATE DATABASE med_diet_db WITH TEMPLATE = template0 ENCODING = 'UTF8' LOCALE_P
 
 ALTER DATABASE med_diet_db OWNER TO postgres;
 
-\unrestrict E5vHl28Nft1cIohvbH7EHpgSDooh66oY0ytcAgwNgOvnZKvacc6R2eleeotBGjy
+\unrestrict hqKrfk5gBalpmH1LtOyG7osBa5iGJwCS89hDm1dAr1ScqSrTQ8FQ6tf9JpZHlco
 \connect med_diet_db
-\restrict E5vHl28Nft1cIohvbH7EHpgSDooh66oY0ytcAgwNgOvnZKvacc6R2eleeotBGjy
+\restrict hqKrfk5gBalpmH1LtOyG7osBa5iGJwCS89hDm1dAr1ScqSrTQ8FQ6tf9JpZHlco
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -58,6 +58,8 @@ CREATE TABLE public.diet_cooking_method_restrictions (
     diet_id integer NOT NULL,
     cooking_method character varying(50) NOT NULL,
     status character varying(20) NOT NULL,
+    is_hard boolean DEFAULT false NOT NULL,
+    reason text,
     CONSTRAINT diet_cooking_method_restrictions_status_check CHECK (((status)::text = ANY ((ARRAY['allowed'::character varying, 'recommended'::character varying, 'forbidden'::character varying])::text[])))
 );
 
@@ -87,32 +89,6 @@ ALTER SEQUENCE public.diet_cooking_method_restrictions_id_seq OWNED BY public.di
 
 
 --
--- Name: diet_hard_cooking_bans; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.diet_hard_cooking_bans (
-    diet_id integer NOT NULL,
-    cooking_method character varying(50) NOT NULL,
-    reason text
-);
-
-
-ALTER TABLE public.diet_hard_cooking_bans OWNER TO postgres;
-
---
--- Name: diet_hard_product_bans; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.diet_hard_product_bans (
-    diet_id integer NOT NULL,
-    product_id integer NOT NULL,
-    reason text
-);
-
-
-ALTER TABLE public.diet_hard_product_bans OWNER TO postgres;
-
---
 -- Name: diet_product_rules; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -120,6 +96,8 @@ CREATE TABLE public.diet_product_rules (
     diet_id integer NOT NULL,
     product_id integer NOT NULL,
     status character varying(20) NOT NULL,
+    is_hard boolean DEFAULT false NOT NULL,
+    reason text,
     CONSTRAINT diet_product_rules_status_check CHECK (((status)::text = ANY ((ARRAY['allowed'::character varying, 'forbidden'::character varying, 'recommended'::character varying])::text[])))
 );
 
@@ -166,10 +144,10 @@ ALTER SEQUENCE public.diets_id_seq OWNED BY public.diets.id;
 
 
 --
--- Name: ingredients; Type: TABLE; Schema: public; Owner: postgres
+-- Name: products; Type: TABLE; Schema: public; Owner: postgres
 --
 
-CREATE TABLE public.ingredients (
+CREATE TABLE public.products (
     id integer NOT NULL,
     name character varying(150) NOT NULL,
     category character varying(100),
@@ -181,43 +159,7 @@ CREATE TABLE public.ingredients (
     glycemic_index double precision,
     is_spicy boolean DEFAULT false,
     is_acidic boolean DEFAULT false,
-    is_saturated_fat boolean DEFAULT false,
-    product_id integer NOT NULL
-);
-
-
-ALTER TABLE public.ingredients OWNER TO postgres;
-
---
--- Name: ingredients_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
---
-
-CREATE SEQUENCE public.ingredients_id_seq
-    AS integer
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER SEQUENCE public.ingredients_id_seq OWNER TO postgres;
-
---
--- Name: ingredients_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
---
-
-ALTER SEQUENCE public.ingredients_id_seq OWNED BY public.ingredients.id;
-
-
---
--- Name: products; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.products (
-    id integer NOT NULL,
-    name character varying(150) NOT NULL,
-    category character varying(100)
+    is_saturated_fat boolean DEFAULT false
 );
 
 
@@ -264,9 +206,9 @@ ALTER TABLE public.recipe_diets OWNER TO postgres;
 CREATE TABLE public.recipe_ingredients (
     id integer NOT NULL,
     recipe_id integer NOT NULL,
-    ingredient_id integer NOT NULL,
     quantity double precision NOT NULL,
-    unit character varying(50)
+    unit character varying(50),
+    product_id integer NOT NULL
 );
 
 
@@ -351,28 +293,19 @@ ALTER SEQUENCE public.recipes_id_seq OWNED BY public.recipes.id;
 
 
 --
--- Name: user_excluded_products; Type: TABLE; Schema: public; Owner: postgres
+-- Name: user_product_preferences; Type: TABLE; Schema: public; Owner: postgres
 --
 
-CREATE TABLE public.user_excluded_products (
+CREATE TABLE public.user_product_preferences (
     user_id integer NOT NULL,
-    product_id integer NOT NULL
+    product_id integer NOT NULL,
+    preference_type character varying(20) NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT user_product_preferences_preference_type_check CHECK (((preference_type)::text = ANY ((ARRAY['excluded'::character varying, 'favorite'::character varying])::text[])))
 );
 
 
-ALTER TABLE public.user_excluded_products OWNER TO postgres;
-
---
--- Name: user_favorite_products; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.user_favorite_products (
-    user_id integer NOT NULL,
-    product_id integer NOT NULL
-);
-
-
-ALTER TABLE public.user_favorite_products OWNER TO postgres;
+ALTER TABLE public.user_product_preferences OWNER TO postgres;
 
 --
 -- Name: user_profiles; Type: TABLE; Schema: public; Owner: postgres
@@ -436,21 +369,6 @@ ALTER SEQUENCE public.users_id_seq OWNED BY public.users.id;
 
 
 --
--- Name: v_ingredients_without_product; Type: VIEW; Schema: public; Owner: postgres
---
-
-CREATE VIEW public.v_ingredients_without_product AS
- SELECT i.id,
-    i.name
-   FROM (public.ingredients i
-     LEFT JOIN public.products p ON ((p.id = i.product_id)))
-  WHERE (p.id IS NULL)
-  ORDER BY i.id;
-
-
-ALTER VIEW public.v_ingredients_without_product OWNER TO postgres;
-
---
 -- Name: v_recipe_count_by_diet; Type: VIEW; Schema: public; Owner: postgres
 --
 
@@ -471,69 +389,26 @@ ALTER VIEW public.v_recipe_count_by_diet OWNER TO postgres;
 --
 
 CREATE VIEW public.v_recipe_diet_forbidden_conflicts AS
- SELECT rd.recipe_id,
+ SELECT DISTINCT rd.recipe_id,
     r.title AS recipe_title,
     rd.diet_id,
     d.name AS diet_name,
     p.id AS product_id,
     p.name AS product_name,
-    pr.status AS rule_status
-   FROM ((((((public.recipe_diets rd
+    pr.status AS rule_status,
+    pr.is_hard,
+    pr.reason
+   FROM (((((public.recipe_diets rd
      JOIN public.recipes r ON ((r.id = rd.recipe_id)))
      JOIN public.diets d ON ((d.id = rd.diet_id)))
      JOIN public.recipe_ingredients ri ON ((ri.recipe_id = rd.recipe_id)))
-     JOIN public.ingredients i ON ((i.id = ri.ingredient_id)))
-     JOIN public.products p ON ((p.id = i.product_id)))
+     JOIN public.products p ON ((p.id = ri.product_id)))
      JOIN public.diet_product_rules pr ON (((pr.diet_id = rd.diet_id) AND (pr.product_id = p.id))))
   WHERE ((pr.status)::text = 'forbidden'::text)
   ORDER BY rd.diet_id, rd.recipe_id, p.id;
 
 
 ALTER VIEW public.v_recipe_diet_forbidden_conflicts OWNER TO postgres;
-
---
--- Name: v_recipe_diet_hard_cooking_conflicts; Type: VIEW; Schema: public; Owner: postgres
---
-
-CREATE VIEW public.v_recipe_diet_hard_cooking_conflicts AS
- SELECT rd.recipe_id,
-    r.title AS recipe_title,
-    rd.diet_id,
-    d.name AS diet_name,
-    r.cooking_method,
-    hb.reason
-   FROM (((public.recipe_diets rd
-     JOIN public.recipes r ON ((r.id = rd.recipe_id)))
-     JOIN public.diets d ON ((d.id = rd.diet_id)))
-     JOIN public.diet_hard_cooking_bans hb ON (((hb.diet_id = rd.diet_id) AND ((hb.cooking_method)::text = (r.cooking_method)::text))))
-  ORDER BY rd.diet_id, rd.recipe_id;
-
-
-ALTER VIEW public.v_recipe_diet_hard_cooking_conflicts OWNER TO postgres;
-
---
--- Name: v_recipe_diet_hard_product_conflicts; Type: VIEW; Schema: public; Owner: postgres
---
-
-CREATE VIEW public.v_recipe_diet_hard_product_conflicts AS
- SELECT rd.recipe_id,
-    r.title AS recipe_title,
-    rd.diet_id,
-    d.name AS diet_name,
-    p.id AS product_id,
-    p.name AS product_name,
-    hb.reason
-   FROM ((((((public.recipe_diets rd
-     JOIN public.recipes r ON ((r.id = rd.recipe_id)))
-     JOIN public.diets d ON ((d.id = rd.diet_id)))
-     JOIN public.recipe_ingredients ri ON ((ri.recipe_id = rd.recipe_id)))
-     JOIN public.ingredients i ON ((i.id = ri.ingredient_id)))
-     JOIN public.products p ON ((p.id = i.product_id)))
-     JOIN public.diet_hard_product_bans hb ON (((hb.diet_id = rd.diet_id) AND (hb.product_id = p.id))))
-  ORDER BY rd.diet_id, rd.recipe_id, p.id;
-
-
-ALTER VIEW public.v_recipe_diet_hard_product_conflicts OWNER TO postgres;
 
 --
 -- Name: v_recipe_diet_missing_rules; Type: VIEW; Schema: public; Owner: postgres
@@ -546,43 +421,17 @@ CREATE VIEW public.v_recipe_diet_missing_rules AS
     d.name AS diet_name,
     p.id AS product_id,
     p.name AS product_name
-   FROM ((((((public.recipe_diets rd
+   FROM (((((public.recipe_diets rd
      JOIN public.recipes r ON ((r.id = rd.recipe_id)))
      JOIN public.diets d ON ((d.id = rd.diet_id)))
      JOIN public.recipe_ingredients ri ON ((ri.recipe_id = rd.recipe_id)))
-     JOIN public.ingredients i ON ((i.id = ri.ingredient_id)))
-     JOIN public.products p ON ((p.id = i.product_id)))
+     JOIN public.products p ON ((p.id = ri.product_id)))
      LEFT JOIN public.diet_product_rules pr ON (((pr.diet_id = rd.diet_id) AND (pr.product_id = p.id))))
   WHERE (pr.product_id IS NULL)
   ORDER BY rd.diet_id, rd.recipe_id, p.id;
 
 
 ALTER VIEW public.v_recipe_diet_missing_rules OWNER TO postgres;
-
---
--- Name: v_recipe_diet_soft_forbidden_products; Type: VIEW; Schema: public; Owner: postgres
---
-
-CREATE VIEW public.v_recipe_diet_soft_forbidden_products AS
- SELECT DISTINCT rd.recipe_id,
-    r.title AS recipe_title,
-    rd.diet_id,
-    d.name AS diet_name,
-    p.id AS product_id,
-    p.name AS product_name
-   FROM (((((((public.recipe_diets rd
-     JOIN public.recipes r ON ((r.id = rd.recipe_id)))
-     JOIN public.diets d ON ((d.id = rd.diet_id)))
-     JOIN public.recipe_ingredients ri ON ((ri.recipe_id = rd.recipe_id)))
-     JOIN public.ingredients i ON ((i.id = ri.ingredient_id)))
-     JOIN public.products p ON ((p.id = i.product_id)))
-     JOIN public.diet_product_rules pr ON (((pr.diet_id = rd.diet_id) AND (pr.product_id = p.id))))
-     LEFT JOIN public.diet_hard_product_bans hb ON (((hb.diet_id = rd.diet_id) AND (hb.product_id = p.id))))
-  WHERE (((pr.status)::text = 'forbidden'::text) AND (hb.product_id IS NULL))
-  ORDER BY rd.diet_id, rd.recipe_id, p.id;
-
-
-ALTER VIEW public.v_recipe_diet_soft_forbidden_products OWNER TO postgres;
 
 --
 -- Name: v_recipes_without_nutrients; Type: VIEW; Schema: public; Owner: postgres
@@ -600,27 +449,6 @@ CREATE VIEW public.v_recipes_without_nutrients AS
 ALTER VIEW public.v_recipes_without_nutrients OWNER TO postgres;
 
 --
--- Name: v_suspicious_recipe_ingredients; Type: VIEW; Schema: public; Owner: postgres
---
-
-CREATE VIEW public.v_suspicious_recipe_ingredients AS
- SELECT ri.id,
-    ri.recipe_id,
-    r.title AS recipe_title,
-    ri.ingredient_id,
-    i.name AS ingredient_name,
-    ri.quantity,
-    ri.unit
-   FROM ((public.recipe_ingredients ri
-     JOIN public.recipes r ON ((r.id = ri.recipe_id)))
-     JOIN public.ingredients i ON ((i.id = ri.ingredient_id)))
-  WHERE ((((i.name)::text = 'Творог 5%'::text) AND ((ri.unit)::text = ANY ((ARRAY['мл'::character varying, 'шт'::character varying])::text[]))) OR (((i.name)::text = 'Лимон'::text) AND ((ri.unit)::text = 'г'::text) AND (ri.quantity >= (80)::double precision)))
-  ORDER BY ri.recipe_id, ri.id;
-
-
-ALTER VIEW public.v_suspicious_recipe_ingredients OWNER TO postgres;
-
---
 -- Name: diet_cooking_method_restrictions id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -632,13 +460,6 @@ ALTER TABLE ONLY public.diet_cooking_method_restrictions ALTER COLUMN id SET DEF
 --
 
 ALTER TABLE ONLY public.diets ALTER COLUMN id SET DEFAULT nextval('public.diets_id_seq'::regclass);
-
-
---
--- Name: ingredients id; Type: DEFAULT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.ingredients ALTER COLUMN id SET DEFAULT nextval('public.ingredients_id_seq'::regclass);
 
 
 --
@@ -673,486 +494,461 @@ ALTER TABLE ONLY public.users ALTER COLUMN id SET DEFAULT nextval('public.users_
 -- Data for Name: diet_cooking_method_restrictions; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-INSERT INTO public.diet_cooking_method_restrictions VALUES (1, 1, 'жарка', 'forbidden');
-INSERT INTO public.diet_cooking_method_restrictions VALUES (2, 4, 'жарка', 'allowed');
-INSERT INTO public.diet_cooking_method_restrictions VALUES (3, 3, 'жарка', 'allowed');
-INSERT INTO public.diet_cooking_method_restrictions VALUES (10, 2, 'жарка', 'forbidden');
-
-
---
--- Data for Name: diet_hard_cooking_bans; Type: TABLE DATA; Schema: public; Owner: postgres
---
-
-INSERT INTO public.diet_hard_cooking_bans VALUES (1, 'жарка', 'Для гастро жарка исключается');
-INSERT INTO public.diet_hard_cooking_bans VALUES (2, 'жарка', 'Для печени жарка исключается');
-
-
---
--- Data for Name: diet_hard_product_bans; Type: TABLE DATA; Schema: public; Owner: postgres
---
-
-INSERT INTO public.diet_hard_product_bans VALUES (1, 2, 'Острое');
-INSERT INTO public.diet_hard_product_bans VALUES (1, 12, 'Выраженно кислое');
-INSERT INTO public.diet_hard_product_bans VALUES (1, 74, 'Раздражающее для ЖКТ');
-INSERT INTO public.diet_hard_product_bans VALUES (1, 113, 'Острое / раздражающее');
-INSERT INTO public.diet_hard_product_bans VALUES (4, 47, 'Майонез');
-INSERT INTO public.diet_hard_product_bans VALUES (4, 48, 'Маргарин');
-INSERT INTO public.diet_hard_product_bans VALUES (4, 50, 'Алкоголь');
-INSERT INTO public.diet_hard_product_bans VALUES (4, 66, 'Очень высокий натрий');
-INSERT INTO public.diet_hard_product_bans VALUES (4, 98, 'Жирное мясо');
-INSERT INTO public.diet_hard_product_bans VALUES (4, 137, 'Жирный сыр');
-INSERT INTO public.diet_hard_product_bans VALUES (4, 138, 'Жирный сыр');
+INSERT INTO public.diet_cooking_method_restrictions VALUES (2, 4, 'жарка', 'allowed', false, NULL);
+INSERT INTO public.diet_cooking_method_restrictions VALUES (3, 3, 'жарка', 'allowed', false, NULL);
+INSERT INTO public.diet_cooking_method_restrictions VALUES (1, 1, 'жарка', 'forbidden', true, 'Для гастро жарка исключается');
+INSERT INTO public.diet_cooking_method_restrictions VALUES (10, 2, 'жарка', 'forbidden', true, 'Для печени жарка исключается');
 
 
 --
 -- Data for Name: diet_product_rules; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-INSERT INTO public.diet_product_rules VALUES (1, 12, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 86, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 1, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 3, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 4, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 2, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 6, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 42, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 8, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 9, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 10, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 11, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 13, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 14, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 10, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 16, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 17, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 18, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 19, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 20, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 21, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 22, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 23, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 24, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 25, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 26, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 27, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 28, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 52, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 27, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 57, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 32, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 33, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 34, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 4, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 36, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 37, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 38, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 39, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 40, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 41, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 1, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 44, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 45, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 46, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 68, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 67, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 2, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 42, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 51, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 52, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 53, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 54, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 55, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 56, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 57, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 58, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 59, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 60, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 61, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 62, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 63, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 64, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 65, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 66, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 67, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 68, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 43, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 70, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 3, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 5, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 6, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 7, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 8, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 9, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 11, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 12, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 13, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 14, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 15, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 16, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 17, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 18, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 19, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 20, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 21, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 22, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 65, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 24, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 25, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 51, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 28, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 29, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 30, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 4, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 32, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 89, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 34, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 35, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 36, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 37, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 38, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 39, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 40, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 41, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 44, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 45, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 46, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 112, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 115, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 133, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 86, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 88, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 54, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 55, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 56, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 58, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 59, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 60, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 61, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 62, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 63, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 64, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 66, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 69, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 70, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 1, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 2, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 3, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 4, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 5, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 6, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 89, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 8, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 9, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 10, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 11, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 12, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 14, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 15, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 16, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 17, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 18, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 19, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 20, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 21, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 22, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 110, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 24, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 25, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 26, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 27, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 28, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 29, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 30, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 31, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 32, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 33, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 34, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 35, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 112, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 37, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 38, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 39, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 40, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 41, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 42, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 43, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 115, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 71, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 72, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 73, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 74, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 75, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 77, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 78, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 84, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 85, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 87, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 88, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 30, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (3, 45, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 46, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 47, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 48, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 49, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 47, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (3, 51, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 52, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 53, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 54, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 55, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 56, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 57, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 58, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 59, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 49, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 66, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 10, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (3, 63, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 64, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 65, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 66, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 67, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 68, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 69, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 70, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 1, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 2, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 3, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 5, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 6, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 7, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 8, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 9, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 11, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 27, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 13, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 14, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 15, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 16, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 17, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 18, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 19, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 20, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 21, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 22, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 52, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 24, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 25, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 26, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 28, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 29, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 53, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 31, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 32, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 57, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 34, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 35, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 36, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 37, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 38, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 39, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 40, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 41, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 42, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 43, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 89, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 45, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 90, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 91, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 98, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 110, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 115, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 51, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 54, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 55, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 56, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 58, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 59, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 60, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 61, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 62, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 63, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 64, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 65, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 123, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 68, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 69, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 70, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 1, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 2, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 3, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 4, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 5, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 6, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 7, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 8, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 9, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 10, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 11, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 12, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 13, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 14, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 15, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 16, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 17, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 18, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 19, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 20, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 21, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 22, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 23, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 24, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 25, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 26, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 27, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 28, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 29, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 30, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 31, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 32, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 33, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 34, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 35, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 36, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 37, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 38, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 39, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 40, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 41, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 42, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 43, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 44, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 45, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 46, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 47, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 48, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 49, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 50, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 51, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 52, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 53, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 54, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 55, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 56, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 57, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 58, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 59, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 60, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 61, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 62, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 63, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 64, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 65, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 66, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 67, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 68, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 69, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 70, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 35, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 43, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 47, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 48, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 49, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 50, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 5, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (1, 7, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (1, 15, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (1, 29, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (1, 31, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (1, 69, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (2, 48, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (3, 129, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 130, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 131, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 133, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 144, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 71, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 72, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (2, 50, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 23, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (2, 26, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (2, 31, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (2, 33, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (3, 13, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (3, 50, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (3, 60, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (3, 61, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (3, 62, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (3, 7, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (3, 23, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (3, 36, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (3, 44, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (4, 48, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 50, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 23, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (4, 33, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (4, 44, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (4, 46, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (4, 79, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 86, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 89, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 112, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 115, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 71, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 72, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 73, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 74, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 75, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 101, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (3, 102, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (3, 107, 'recommended');
-INSERT INTO public.diet_product_rules VALUES (3, 86, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (3, 112, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 77, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 78, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 79, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 84, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 85, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 86, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 87, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 88, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 89, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 90, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 91, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 98, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 110, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 112, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 115, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 123, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 129, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 130, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 131, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 133, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (5, 144, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (4, 12, 'allowed');
-INSERT INTO public.diet_product_rules VALUES (1, 74, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 113, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 77, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 104, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (1, 79, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 98, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 53, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 137, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 138, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 113, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 131, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 146, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 79, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 104, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 78, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 77, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 94, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (2, 149, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 47, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 67, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 49, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 98, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 137, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 138, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 30, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 113, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 131, 'forbidden');
-INSERT INTO public.diet_product_rules VALUES (4, 146, 'forbidden');
+INSERT INTO public.diet_product_rules VALUES (1, 86, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 1, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 3, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 4, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 6, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 42, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 8, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 9, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 10, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 11, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 13, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 14, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 10, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 16, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 17, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 18, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 19, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 20, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 21, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 22, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 23, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 24, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 25, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 26, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 27, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 28, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 52, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 27, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 57, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 32, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 33, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 34, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 4, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 36, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 37, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 38, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 39, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 40, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 41, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 1, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 44, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 45, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 46, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 68, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 67, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 2, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 42, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 51, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 52, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 53, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 54, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 55, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 56, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 57, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 58, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 59, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 60, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 61, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 62, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 63, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 64, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 65, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 66, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 67, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 68, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 43, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 70, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 3, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 5, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 6, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 7, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 8, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 9, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 11, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 12, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 13, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 14, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 15, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 16, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 17, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 18, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 19, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 20, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 21, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 22, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 65, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 24, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 25, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 51, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 28, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 29, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 30, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 4, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 32, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 89, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 34, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 35, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 36, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 37, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 38, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 39, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 40, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 41, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 44, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 45, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 46, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 112, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 115, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 133, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 86, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 88, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 54, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 55, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 56, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 58, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 59, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 60, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 61, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 62, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 63, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 64, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 66, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 69, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 70, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 1, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 2, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 3, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 4, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 5, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 6, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 89, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 8, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 9, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 10, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 11, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 12, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 14, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 15, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 16, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 17, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 18, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 19, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 20, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 21, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 22, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 110, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 24, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 25, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 26, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 27, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 28, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 29, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 30, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 31, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 32, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 33, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 34, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 35, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 112, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 37, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 38, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 39, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 40, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 41, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 42, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 43, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 115, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 71, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 72, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 73, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 74, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 75, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 77, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 78, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 84, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 85, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 87, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 88, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 30, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 45, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 46, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 47, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 48, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 49, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 47, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 51, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 52, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 53, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 54, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 55, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 56, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 57, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 58, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 59, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 49, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 10, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 63, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 64, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 65, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 66, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 67, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 68, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 69, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 70, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 1, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 2, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 3, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 5, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 6, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 7, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 8, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 9, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 11, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 27, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 13, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 14, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 15, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 16, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 17, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 18, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 19, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 20, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 21, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 22, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 52, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 24, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 25, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 26, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 28, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 29, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 53, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 31, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 32, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 57, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 34, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 35, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 36, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 37, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 38, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 39, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 40, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 41, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 42, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 43, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 89, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 45, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 90, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 91, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 98, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 110, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 115, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 51, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 54, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 55, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 56, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 58, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 59, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 60, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 61, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 62, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 63, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 64, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 65, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 123, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 68, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 69, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 70, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 1, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 2, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 3, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 4, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 5, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 6, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 7, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 8, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 9, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 10, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 11, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 12, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 13, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 14, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 15, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 16, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 17, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 18, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 19, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 20, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 21, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 22, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 23, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 24, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 25, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 26, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 27, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 28, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 29, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 30, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 31, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 32, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 33, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 34, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 35, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 36, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 37, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 38, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 39, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 40, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 41, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 42, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 43, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 44, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 45, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 46, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 47, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 48, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 49, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 50, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 51, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 52, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 53, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 54, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 55, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 56, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 57, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 58, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 59, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 60, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 61, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 62, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 63, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 64, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 65, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 66, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 67, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 68, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 69, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 70, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 35, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 43, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 47, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 48, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 49, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 50, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 5, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 7, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 15, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 29, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 31, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 69, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 48, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 129, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 130, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 131, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 133, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 144, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 71, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 72, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 50, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 23, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 26, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 31, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 33, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 13, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 50, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 60, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 61, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 62, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 7, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 23, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 36, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 44, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 23, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 33, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 44, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 46, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 79, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 86, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 89, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 112, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 115, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 71, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 72, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 73, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 74, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 75, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 101, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 102, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 107, 'recommended', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 86, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (3, 112, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 77, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 78, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 79, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 84, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 85, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 86, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 87, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 88, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 89, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 90, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 91, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 98, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 110, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 112, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 115, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 123, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 129, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 130, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 131, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 133, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (5, 144, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 12, 'allowed', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 12, 'forbidden', true, 'Выраженно кислое');
+INSERT INTO public.diet_product_rules VALUES (1, 2, 'forbidden', true, 'Острое');
+INSERT INTO public.diet_product_rules VALUES (4, 66, 'forbidden', true, 'Очень высокий натрий');
+INSERT INTO public.diet_product_rules VALUES (4, 48, 'forbidden', true, 'Маргарин');
+INSERT INTO public.diet_product_rules VALUES (4, 50, 'forbidden', true, 'Алкоголь');
+INSERT INTO public.diet_product_rules VALUES (1, 74, 'forbidden', true, 'Раздражающее для ЖКТ');
+INSERT INTO public.diet_product_rules VALUES (1, 113, 'forbidden', true, 'Острое / раздражающее');
+INSERT INTO public.diet_product_rules VALUES (4, 47, 'forbidden', true, 'Майонез');
+INSERT INTO public.diet_product_rules VALUES (4, 98, 'forbidden', true, 'Жирное мясо');
+INSERT INTO public.diet_product_rules VALUES (4, 137, 'forbidden', true, 'Жирный сыр');
+INSERT INTO public.diet_product_rules VALUES (4, 138, 'forbidden', true, 'Жирный сыр');
+INSERT INTO public.diet_product_rules VALUES (1, 77, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 104, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (1, 79, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 98, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 53, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 137, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 138, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 113, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 131, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 146, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 79, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 104, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 78, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 77, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 94, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (2, 149, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 67, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 49, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 30, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 113, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 131, 'forbidden', false, NULL);
+INSERT INTO public.diet_product_rules VALUES (4, 146, 'forbidden', false, NULL);
 
 
 --
@@ -1167,315 +963,159 @@ INSERT INTO public.diets VALUES (5, 'Базовая', 'Общий режим п�
 
 
 --
--- Data for Name: ingredients; Type: TABLE DATA; Schema: public; Owner: postgres
---
-
-INSERT INTO public.ingredients VALUES (16, 'Оливковое масло', 'Жиры', 884, 0, 100, 0, 2, 0, false, false, true, 1);
-INSERT INTO public.ingredients VALUES (18, 'Перец чили', 'Овощи', 40, 2, 0.4, 9, 7, 15, true, false, false, 2);
-INSERT INTO public.ingredients VALUES (20, 'Лук репчатый', 'Овощи', 40, 1.1, 0.1, 9, 4, 10, false, false, false, 3);
-INSERT INTO public.ingredients VALUES (17, 'Сливочное масло', 'Жиры', 717, 0.9, 81, 0.1, 11, 0, false, false, true, 4);
-INSERT INTO public.ingredients VALUES (12, 'Молоко 2.5%', 'Молочные', 52, 3.2, 2.5, 4.8, 44, 30, false, false, false, 5);
-INSERT INTO public.ingredients VALUES (7, 'Овсяные хлопья (сухие)', 'Крупы', 370, 13, 7, 60, 2, 55, false, false, false, 6);
-INSERT INTO public.ingredients VALUES (10, 'Кабачок', 'Овощи', 17, 1.2, 0.3, 3, 8, 15, false, false, false, 7);
-INSERT INTO public.ingredients VALUES (8, 'Картофель', 'Овощи', 77, 2, 0.1, 17, 6, 80, false, false, false, 8);
-INSERT INTO public.ingredients VALUES (6, 'Гречка (сухая)', 'Крупы', 343, 13, 3.4, 72, 2, 50, false, false, false, 9);
-INSERT INTO public.ingredients VALUES (2, 'Говядина', 'Мясо', 187, 18.9, 12.4, 0, 72, 0, false, false, true, 10);
-INSERT INTO public.ingredients VALUES (4, 'Яйцо', 'Яйца', 143, 12.6, 9.5, 0.7, 124, 0, false, false, true, 11);
-INSERT INTO public.ingredients VALUES (19, 'Лимон', 'Фрукты', 29, 1.1, 0.3, 9, 2, 25, false, true, false, 12);
-INSERT INTO public.ingredients VALUES (15, 'Сахар', 'Подсластители', 387, 0, 0, 100, 1, 100, false, false, false, 13);
-INSERT INTO public.ingredients VALUES (5, 'Рис (сухой)', 'Крупы', 360, 7, 0.6, 78, 1, 70, false, false, false, 14);
-INSERT INTO public.ingredients VALUES (1, 'Куриная грудка', 'Мясо', 120, 22, 2.6, 0, 70, 0, false, false, false, 15);
-INSERT INTO public.ingredients VALUES (9, 'Морковь', 'Овощи', 41, 1, 0.2, 10, 69, 35, false, false, false, 16);
-INSERT INTO public.ingredients VALUES (3, 'Треска', 'Рыба', 82, 18, 0.7, 0, 60, 0, false, false, false, 17);
-INSERT INTO public.ingredients VALUES (11, 'Брокколи', 'Овощи', 34, 2.8, 0.4, 7, 33, 10, false, false, false, 18);
-INSERT INTO public.ingredients VALUES (13, 'Творог 5%', 'Молочные', 121, 16, 5, 3, 40, 30, false, false, false, 19);
-INSERT INTO public.ingredients VALUES (14, 'Йогурт натуральный', 'Молочные', 60, 10, 0.4, 3.6, 36, 35, false, false, false, 20);
-INSERT INTO public.ingredients VALUES (21, 'Индейка', 'Мясо', 135, 21, 5, 0, 65, 0, false, false, false, 21);
-INSERT INTO public.ingredients VALUES (22, 'Кролик', 'Мясо', 173, 21, 8, 0, 40, 0, false, false, true, 22);
-INSERT INTO public.ingredients VALUES (23, 'Лосось', 'Рыба', 208, 20, 13, 0, 60, 0, false, false, true, 23);
-INSERT INTO public.ingredients VALUES (24, 'Тунец', 'Рыба', 144, 23, 4.9, 0, 45, 0, false, false, false, 24);
-INSERT INTO public.ingredients VALUES (25, 'Форель', 'Рыба', 190, 20.5, 11.5, 0, 55, 0, false, false, true, 25);
-INSERT INTO public.ingredients VALUES (26, 'Кефир', 'Молочные', 53, 3, 2.5, 4, 45, 35, false, false, false, 26);
-INSERT INTO public.ingredients VALUES (27, 'Сметана', 'Молочные', 206, 2.5, 20, 3.5, 70, 30, false, false, true, 27);
-INSERT INTO public.ingredients VALUES (28, 'Сыр нежирный', 'Молочные', 250, 25, 15, 2, 800, 30, false, false, true, 28);
-INSERT INTO public.ingredients VALUES (29, 'Огурец', 'Овощи', 15, 0.7, 0.1, 3, 5, 15, false, false, false, 29);
-INSERT INTO public.ingredients VALUES (30, 'Помидор', 'Овощи', 18, 0.9, 0.2, 3.9, 5, 30, false, true, false, 30);
-INSERT INTO public.ingredients VALUES (31, 'Свекла', 'Овощи', 43, 1.6, 0.2, 9.6, 55, 65, false, false, false, 31);
-INSERT INTO public.ingredients VALUES (32, 'Капуста', 'Овощи', 25, 1.3, 0.1, 5.8, 15, 15, false, false, false, 32);
-INSERT INTO public.ingredients VALUES (33, 'Шпинат', 'Овощи', 23, 2.9, 0.4, 3.6, 80, 15, false, false, false, 33);
-INSERT INTO public.ingredients VALUES (34, 'Тыква', 'Овощи', 26, 1, 0.1, 6.5, 4, 65, false, false, false, 34);
-INSERT INTO public.ingredients VALUES (35, 'Баклажан', 'Овощи', 25, 1, 0.2, 5.7, 3, 20, false, false, false, 35);
-INSERT INTO public.ingredients VALUES (36, 'Яблоко', 'Фрукты', 52, 0.3, 0.2, 14, 1, 35, false, true, false, 36);
-INSERT INTO public.ingredients VALUES (37, 'Груша', 'Фрукты', 57, 0.4, 0.3, 15, 1, 35, false, false, false, 37);
-INSERT INTO public.ingredients VALUES (38, 'Черника', 'Ягоды', 57, 0.7, 0.3, 14.5, 1, 40, false, false, false, 38);
-INSERT INTO public.ingredients VALUES (39, 'Клубника', 'Ягоды', 32, 0.7, 0.3, 7.7, 1, 40, false, true, false, 39);
-INSERT INTO public.ingredients VALUES (40, 'Булгур', 'Крупы', 342, 12, 1.3, 76, 5, 45, false, false, false, 40);
-INSERT INTO public.ingredients VALUES (41, 'Киноа', 'Крупы', 368, 14, 6, 64, 5, 50, false, false, false, 41);
-INSERT INTO public.ingredients VALUES (42, 'Перловка', 'Крупы', 315, 9.3, 1.1, 67, 5, 30, false, false, false, 42);
-INSERT INTO public.ingredients VALUES (43, 'Чечевица', 'Бобовые', 353, 25, 1.1, 60, 5, 30, false, false, false, 43);
-INSERT INTO public.ingredients VALUES (44, 'Миндаль', 'Орехи', 579, 21, 50, 22, 1, 15, false, false, true, 44);
-INSERT INTO public.ingredients VALUES (45, 'Грецкий орех', 'Орехи', 654, 15, 65, 14, 2, 15, false, false, true, 45);
-INSERT INTO public.ingredients VALUES (46, 'Льняное масло', 'Жиры', 884, 0, 100, 0, 0, 0, false, false, true, 46);
-INSERT INTO public.ingredients VALUES (47, 'Майонез', 'Соусы', 680, 1, 75, 2.5, 800, 10, false, false, true, 47);
-INSERT INTO public.ingredients VALUES (48, 'Маргарин', 'Жиры', 720, 0, 80, 0.5, 800, 0, false, false, true, 48);
-INSERT INTO public.ingredients VALUES (49, 'Колбаса', 'Мясо', 300, 12, 28, 1.5, 1200, 0, false, false, true, 49);
-INSERT INTO public.ingredients VALUES (50, 'Алкоголь', 'Напитки', 70, 0, 0, 0, 5, 15, false, true, false, 50);
-INSERT INTO public.ingredients VALUES (51, 'Шампиньоны', 'Грибы', 22, 3.1, 0.3, 3.3, 5, 10, false, false, false, 51);
-INSERT INTO public.ingredients VALUES (52, 'Сливки 10%', 'Молочные', 118, 2.8, 10, 4, 50, 30, false, false, true, 52);
-INSERT INTO public.ingredients VALUES (53, 'Сливки 20%', 'Молочные', 205, 2.5, 20, 3.5, 55, 30, false, false, true, 53);
-INSERT INTO public.ingredients VALUES (54, 'Паста', 'Крупы', 350, 12, 1.5, 70, 3, 50, false, false, false, 54);
-INSERT INTO public.ingredients VALUES (55, 'Петрушка', 'Зелень', 36, 3, 0.8, 6, 50, 15, false, false, false, 55);
-INSERT INTO public.ingredients VALUES (56, 'Укроп', 'Зелень', 43, 3.5, 1.1, 7, 61, 15, false, false, false, 56);
-INSERT INTO public.ingredients VALUES (57, 'Сыр пармезан', 'Молочные', 431, 38, 29, 4, 1600, 20, false, false, true, 57);
-INSERT INTO public.ingredients VALUES (58, 'Хлеб цельнозерновой', 'Хлеб', 247, 9, 3.5, 45, 500, 45, false, false, false, 58);
-INSERT INTO public.ingredients VALUES (59, 'Хлеб белый', 'Хлеб', 265, 8, 3, 50, 500, 70, false, false, false, 59);
-INSERT INTO public.ingredients VALUES (60, 'Мёд', 'Подсластители', 304, 0.3, 0, 82, 4, 60, false, false, false, 60);
-INSERT INTO public.ingredients VALUES (61, 'Изюм', 'Сухофрукты', 299, 3.1, 0.5, 79, 11, 65, false, false, false, 61);
-INSERT INTO public.ingredients VALUES (62, 'Курага', 'Сухофрукты', 241, 3.4, 0.5, 63, 25, 55, false, false, false, 62);
-INSERT INTO public.ingredients VALUES (63, 'Кукуруза', 'Овощи', 86, 3.2, 1.2, 19, 1, 55, false, false, false, 63);
-INSERT INTO public.ingredients VALUES (64, 'Зелёный горошек', 'Овощи', 81, 5.4, 0.4, 14, 2, 45, false, false, false, 64);
-INSERT INTO public.ingredients VALUES (65, 'Фасоль', 'Бобовые', 333, 21, 1.5, 60, 5, 30, false, false, false, 65);
-INSERT INTO public.ingredients VALUES (66, 'Соевый соус', 'Соусы', 53, 8.1, 0, 4.9, 5500, 15, false, false, false, 66);
-INSERT INTO public.ingredients VALUES (67, 'Кетчуп', 'Соусы', 110, 1.5, 0.2, 27, 1100, 45, false, true, false, 67);
-INSERT INTO public.ingredients VALUES (68, 'Растительное масло', 'Жиры', 884, 0, 100, 0, 0, 0, false, false, true, 68);
-INSERT INTO public.ingredients VALUES (69, 'Куриный бульон', 'Прочее', 10, 1, 0.5, 0.5, 350, 0, false, false, false, 69);
-INSERT INTO public.ingredients VALUES (70, 'Говяжий бульон', 'Прочее', 12, 1.2, 0.6, 0.6, 380, 0, false, false, false, 70);
-INSERT INTO public.ingredients VALUES (71, 'Кокосовое молоко', 'Молочные', 230, 2.3, 23.8, 5.5, 15, 40, false, false, true, 71);
-INSERT INTO public.ingredients VALUES (72, 'Рисовая лапша', 'Крупы', 364, 5, 1, 81, 10, 60, false, false, false, 72);
-INSERT INTO public.ingredients VALUES (73, 'Соус терияки', 'Соусы', 89, 4.5, 0, 18, 4300, 20, false, false, false, 73);
-INSERT INTO public.ingredients VALUES (74, 'Имбирь', 'Овощи', 80, 1.8, 0.8, 18, 13, 15, true, true, false, 74);
-INSERT INTO public.ingredients VALUES (75, 'Лайм', 'Фрукты', 30, 0.7, 0.2, 11, 2, 30, false, true, false, 75);
-INSERT INTO public.ingredients VALUES (76, 'Кунжут', 'Семена', 573, 17.7, 49.7, 23.5, 11, 35, false, false, true, 76);
-INSERT INTO public.ingredients VALUES (77, 'Тофу', 'Бобовые', 76, 8.1, 4.8, 1.9, 7, 15, false, false, false, 77);
-INSERT INTO public.ingredients VALUES (78, 'Нут', 'Бобовые', 364, 19, 6, 61, 24, 35, false, false, false, 78);
-INSERT INTO public.ingredients VALUES (79, 'Кукурузная крупа', 'Крупы', 365, 8.3, 1.2, 78, 2, 70, false, false, false, 79);
-INSERT INTO public.ingredients VALUES (80, 'Полента', 'Крупы', 370, 8, 1.5, 80, 2, 70, false, false, false, 80);
-INSERT INTO public.ingredients VALUES (81, 'Сливочный сыр', 'Молочные', 342, 6, 34, 4, 350, 30, false, false, true, 81);
-INSERT INTO public.ingredients VALUES (82, 'Моцарелла', 'Молочные', 280, 22, 20, 2.2, 600, 30, false, false, true, 82);
-INSERT INTO public.ingredients VALUES (83, 'Рикотта', 'Молочные', 174, 11, 13, 3, 100, 30, false, false, true, 83);
-INSERT INTO public.ingredients VALUES (84, 'Креветки', 'Морепродукты', 99, 24, 0.5, 0, 170, 0, false, false, false, 84);
-INSERT INTO public.ingredients VALUES (85, 'Мидии', 'Морепродукты', 86, 12, 2, 3, 200, 0, false, false, false, 85);
-INSERT INTO public.ingredients VALUES (86, 'Цукини', 'Овощи', 17, 1.2, 0.3, 3.1, 8, 15, false, false, false, 86);
-INSERT INTO public.ingredients VALUES (87, 'Руккола', 'Зелень', 25, 2.6, 0.7, 3.7, 45, 15, true, false, false, 87);
-INSERT INTO public.ingredients VALUES (88, 'Авокадо', 'Фрукты', 160, 2, 15, 9, 7, 15, false, false, true, 88);
-INSERT INTO public.ingredients VALUES (89, 'Томатный соус', 'Соусы', 50, 1.5, 0.5, 10, 450, 35, false, true, false, 89);
-INSERT INTO public.ingredients VALUES (90, 'Базилик', 'Зелень', 44, 3.2, 0.6, 8, 5, 10, false, false, false, 90);
-INSERT INTO public.ingredients VALUES (91, 'Орегано', 'Зелень', 265, 9, 4.3, 68, 10, 10, false, false, false, 91);
-INSERT INTO public.ingredients VALUES (92, 'Лаваш', 'Хлеб', 275, 9, 1, 55, 450, 65, false, false, false, 92);
-INSERT INTO public.ingredients VALUES (93, 'Тортилья', 'Хлеб', 300, 8, 7, 50, 400, 65, false, false, true, 93);
-INSERT INTO public.ingredients VALUES (94, 'Грибы вешенки', 'Грибы', 33, 3.3, 0.4, 6, 10, 10, false, false, false, 94);
-INSERT INTO public.ingredients VALUES (95, 'Сыр фета', 'Молочные', 264, 14, 21, 4, 1100, 20, false, false, true, 95);
-INSERT INTO public.ingredients VALUES (96, 'Гранат', 'Фрукты', 83, 1.7, 1.2, 19, 3, 35, false, true, false, 96);
-INSERT INTO public.ingredients VALUES (97, 'Кабачковая икра', 'Прочее', 97, 1.2, 7, 8, 450, 20, false, false, false, 97);
-INSERT INTO public.ingredients VALUES (98, 'Куриные бёдра', 'Мясо', 210, 18, 15, 0, 80, 0, false, false, true, 98);
-INSERT INTO public.ingredients VALUES (99, 'Филе индейки', 'Мясо', 120, 24, 2, 0, 60, 0, false, false, false, 99);
-INSERT INTO public.ingredients VALUES (100, 'Пекинская капуста', 'Овощи', 16, 1.2, 0.2, 3, 20, 15, false, false, false, 100);
-INSERT INTO public.ingredients VALUES (101, 'Чиа', 'Семена', 486, 16.5, 30.7, 42.1, 5, 15, false, false, true, 101);
-INSERT INTO public.ingredients VALUES (102, 'Льняные семена', 'Семена', 534, 18.3, 42.2, 28.9, 30, 15, false, false, true, 102);
-INSERT INTO public.ingredients VALUES (103, 'Финики', 'Сухофрукты', 282, 2.5, 0.4, 75, 1, 70, false, false, false, 103);
-INSERT INTO public.ingredients VALUES (104, 'Ячневая крупа', 'Крупы', 315, 10, 1.3, 65, 5, 35, false, false, false, 104);
-INSERT INTO public.ingredients VALUES (105, 'Крабовое мясо', 'Морепродукты', 87, 18, 1, 0, 400, 0, false, false, false, 105);
-INSERT INTO public.ingredients VALUES (106, 'Куриное яйцо перепелиное', 'Яйца', 158, 13, 11, 0.6, 140, 0, false, false, true, 106);
-INSERT INTO public.ingredients VALUES (107, 'Тыквенные семечки', 'Семена', 559, 30, 49, 11, 7, 25, false, false, true, 107);
-INSERT INTO public.ingredients VALUES (108, 'Какао', 'Подсластители', 228, 20, 14, 58, 5, 20, false, false, false, 108);
-INSERT INTO public.ingredients VALUES (109, 'Кокосовое масло', 'Жиры', 862, 0, 100, 0, 0, 0, false, false, true, 109);
-INSERT INTO public.ingredients VALUES (110, 'Салат айсберг', 'Овощи', 14, 0.9, 0.1, 2.9, 10, 15, false, false, false, 110);
-INSERT INTO public.ingredients VALUES (111, 'Сельдерей', 'Овощи', 16, 0.7, 0.2, 3, 80, 15, false, false, false, 111);
-INSERT INTO public.ingredients VALUES (112, 'Перец болгарский', 'Овощи', 31, 1, 0.3, 6, 2, 35, false, false, false, 112);
-INSERT INTO public.ingredients VALUES (113, 'Горчица', 'Соусы', 66, 4, 3, 6, 1100, 20, true, true, false, 113);
-INSERT INTO public.ingredients VALUES (114, 'Йогурт греческий', 'Молочные', 59, 10, 0.4, 3.6, 35, 35, false, false, false, 114);
-INSERT INTO public.ingredients VALUES (115, 'Куриный фарш', 'Мясо', 160, 18, 9, 0, 70, 0, false, false, true, 115);
-INSERT INTO public.ingredients VALUES (116, 'Говяжий фарш', 'Мясо', 250, 17, 20, 0, 75, 0, false, false, true, 116);
-INSERT INTO public.ingredients VALUES (117, 'Киноа варёная', 'Крупы', 120, 4.4, 1.9, 21.3, 5, 50, false, false, false, 117);
-INSERT INTO public.ingredients VALUES (118, 'Рис бурый', 'Крупы', 370, 7.5, 2.5, 75, 3, 50, false, false, false, 118);
-INSERT INTO public.ingredients VALUES (119, 'Паста цельнозерновая', 'Крупы', 350, 13, 2, 68, 5, 45, false, false, false, 119);
-INSERT INTO public.ingredients VALUES (120, 'Соус песто', 'Соусы', 490, 5, 50, 6, 800, 15, false, false, true, 120);
-INSERT INTO public.ingredients VALUES (121, 'Мед горный', 'Подсластители', 304, 0.3, 0, 82, 4, 60, false, false, false, 121);
-INSERT INTO public.ingredients VALUES (122, 'Киви', 'Фрукты', 61, 1.1, 0.5, 14.7, 3, 50, false, true, false, 122);
-INSERT INTO public.ingredients VALUES (123, 'Манго', 'Фрукты', 60, 0.8, 0.4, 15, 1, 55, false, false, false, 123);
-INSERT INTO public.ingredients VALUES (124, 'Ананас', 'Фрукты', 50, 0.5, 0.1, 13, 1, 60, false, true, false, 124);
-INSERT INTO public.ingredients VALUES (125, 'Голубика', 'Ягоды', 57, 0.7, 0.3, 14.5, 1, 40, false, false, false, 125);
-INSERT INTO public.ingredients VALUES (126, 'Ежевика', 'Ягоды', 43, 1.4, 0.5, 10, 1, 40, false, false, false, 126);
-INSERT INTO public.ingredients VALUES (127, 'Персик', 'Фрукты', 39, 0.9, 0.3, 9.5, 1, 35, false, false, false, 127);
-INSERT INTO public.ingredients VALUES (128, 'Абрикос', 'Фрукты', 48, 1.4, 0.4, 11, 1, 35, false, false, false, 128);
-INSERT INTO public.ingredients VALUES (129, 'Кальмар', 'Морепродукты', 92, 15, 1.4, 3.1, 200, 0, false, false, false, 129);
-INSERT INTO public.ingredients VALUES (130, 'Лапша удон', 'Крупы', 138, 4, 0.5, 29, 500, 55, false, false, false, 130);
-INSERT INTO public.ingredients VALUES (131, 'Соус карри', 'Соусы', 120, 1.5, 8, 10, 1200, 30, true, false, false, 131);
-INSERT INTO public.ingredients VALUES (132, 'Куриный соус азиатский', 'Соусы', 90, 5, 2, 15, 2000, 20, false, false, false, 132);
-INSERT INTO public.ingredients VALUES (133, 'Капуста брокколи замороженная', 'Овощи', 34, 2.8, 0.4, 7, 33, 10, false, false, false, 133);
-INSERT INTO public.ingredients VALUES (134, 'Фасоль стручковая', 'Овощи', 31, 1.8, 0.2, 7, 5, 30, false, false, false, 134);
-INSERT INTO public.ingredients VALUES (135, 'Кукуруза консервированная', 'Овощи', 86, 3.2, 1.2, 19, 250, 55, false, false, false, 135);
-INSERT INTO public.ingredients VALUES (136, 'Томат черри', 'Овощи', 18, 0.9, 0.2, 3.9, 5, 30, false, true, false, 136);
-INSERT INTO public.ingredients VALUES (137, 'Сыр гауда', 'Молочные', 356, 25, 27, 2, 800, 20, false, false, true, 137);
-INSERT INTO public.ingredients VALUES (138, 'Сыр чеддер', 'Молочные', 404, 25, 33, 1.3, 620, 20, false, false, true, 138);
-INSERT INTO public.ingredients VALUES (139, 'Сметана 10%', 'Молочные', 115, 2.5, 10, 3, 50, 30, false, false, true, 139);
-INSERT INTO public.ingredients VALUES (140, 'Сметана 20%', 'Молочные', 206, 2.5, 20, 3.5, 70, 30, false, false, true, 140);
-INSERT INTO public.ingredients VALUES (141, 'Йогурт питьевой', 'Молочные', 70, 3, 1.5, 11, 50, 35, false, false, false, 141);
-INSERT INTO public.ingredients VALUES (142, 'Кефир 1%', 'Молочные', 40, 3, 1, 4, 45, 35, false, false, false, 142);
-INSERT INTO public.ingredients VALUES (143, 'Кефир 3.2%', 'Молочные', 60, 3, 3.2, 4, 45, 35, false, false, false, 143);
-INSERT INTO public.ingredients VALUES (144, 'Оливки', 'Овощи', 115, 0.8, 10.7, 6.3, 1600, 15, false, false, true, 144);
-INSERT INTO public.ingredients VALUES (145, 'Маслины', 'Овощи', 145, 1, 15.3, 3.8, 1800, 15, false, false, true, 145);
-INSERT INTO public.ingredients VALUES (146, 'Соус чесночный', 'Соусы', 150, 2, 10, 12, 1200, 20, true, false, false, 146);
-INSERT INTO public.ingredients VALUES (147, 'Соус сырный', 'Соусы', 250, 8, 20, 8, 900, 25, false, false, true, 147);
-INSERT INTO public.ingredients VALUES (148, 'Куриные крылья', 'Мясо', 203, 18, 15, 0, 80, 0, false, false, true, 148);
-INSERT INTO public.ingredients VALUES (149, 'Грибы лесные', 'Грибы', 25, 3, 0.5, 4, 5, 10, false, false, false, 149);
-INSERT INTO public.ingredients VALUES (150, 'Сливки 33%', 'Молочные', 330, 2.2, 33, 3, 55, 30, false, false, true, 150);
-
-
---
 -- Data for Name: products; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-INSERT INTO public.products VALUES (1, 'Оливковое масло', 'Жиры');
-INSERT INTO public.products VALUES (2, 'Перец чили', 'Овощи');
-INSERT INTO public.products VALUES (3, 'Лук репчатый', 'Овощи');
-INSERT INTO public.products VALUES (4, 'Сливочное масло', 'Жиры');
-INSERT INTO public.products VALUES (5, 'Молоко 2.5%', 'Молочные');
-INSERT INTO public.products VALUES (6, 'Овсяные хлопья (сухие)', 'Крупы');
-INSERT INTO public.products VALUES (7, 'Кабачок', 'Овощи');
-INSERT INTO public.products VALUES (8, 'Картофель', 'Овощи');
-INSERT INTO public.products VALUES (9, 'Гречка (сухая)', 'Крупы');
-INSERT INTO public.products VALUES (10, 'Говядина', 'Мясо');
-INSERT INTO public.products VALUES (11, 'Яйцо', 'Яйца');
-INSERT INTO public.products VALUES (12, 'Лимон', 'Фрукты');
-INSERT INTO public.products VALUES (13, 'Сахар', 'Подсластители');
-INSERT INTO public.products VALUES (14, 'Рис (сухой)', 'Крупы');
-INSERT INTO public.products VALUES (15, 'Куриная грудка', 'Мясо');
-INSERT INTO public.products VALUES (16, 'Морковь', 'Овощи');
-INSERT INTO public.products VALUES (17, 'Треска', 'Рыба');
-INSERT INTO public.products VALUES (18, 'Брокколи', 'Овощи');
-INSERT INTO public.products VALUES (19, 'Творог 5%', 'Молочные');
-INSERT INTO public.products VALUES (20, 'Йогурт натуральный', 'Молочные');
-INSERT INTO public.products VALUES (21, 'Индейка', 'Мясо');
-INSERT INTO public.products VALUES (22, 'Кролик', 'Мясо');
-INSERT INTO public.products VALUES (23, 'Лосось', 'Рыба');
-INSERT INTO public.products VALUES (24, 'Тунец', 'Рыба');
-INSERT INTO public.products VALUES (25, 'Форель', 'Рыба');
-INSERT INTO public.products VALUES (26, 'Кефир', 'Молочные');
-INSERT INTO public.products VALUES (27, 'Сметана', 'Молочные');
-INSERT INTO public.products VALUES (28, 'Сыр нежирный', 'Молочные');
-INSERT INTO public.products VALUES (29, 'Огурец', 'Овощи');
-INSERT INTO public.products VALUES (30, 'Помидор', 'Овощи');
-INSERT INTO public.products VALUES (31, 'Свекла', 'Овощи');
-INSERT INTO public.products VALUES (32, 'Капуста', 'Овощи');
-INSERT INTO public.products VALUES (33, 'Шпинат', 'Овощи');
-INSERT INTO public.products VALUES (34, 'Тыква', 'Овощи');
-INSERT INTO public.products VALUES (35, 'Баклажан', 'Овощи');
-INSERT INTO public.products VALUES (36, 'Яблоко', 'Фрукты');
-INSERT INTO public.products VALUES (37, 'Груша', 'Фрукты');
-INSERT INTO public.products VALUES (38, 'Черника', 'Ягоды');
-INSERT INTO public.products VALUES (39, 'Клубника', 'Ягоды');
-INSERT INTO public.products VALUES (40, 'Булгур', 'Крупы');
-INSERT INTO public.products VALUES (41, 'Киноа', 'Крупы');
-INSERT INTO public.products VALUES (42, 'Перловка', 'Крупы');
-INSERT INTO public.products VALUES (43, 'Чечевица', 'Бобовые');
-INSERT INTO public.products VALUES (44, 'Миндаль', 'Орехи');
-INSERT INTO public.products VALUES (45, 'Грецкий орех', 'Орехи');
-INSERT INTO public.products VALUES (46, 'Льняное масло', 'Жиры');
-INSERT INTO public.products VALUES (47, 'Майонез', 'Соусы');
-INSERT INTO public.products VALUES (48, 'Маргарин', 'Жиры');
-INSERT INTO public.products VALUES (49, 'Колбаса', 'Мясо');
-INSERT INTO public.products VALUES (50, 'Алкоголь', 'Напитки');
-INSERT INTO public.products VALUES (51, 'Шампиньоны', 'Грибы');
-INSERT INTO public.products VALUES (52, 'Сливки 10%', 'Молочные');
-INSERT INTO public.products VALUES (53, 'Сливки 20%', 'Молочные');
-INSERT INTO public.products VALUES (54, 'Паста', 'Крупы');
-INSERT INTO public.products VALUES (55, 'Петрушка', 'Зелень');
-INSERT INTO public.products VALUES (56, 'Укроп', 'Зелень');
-INSERT INTO public.products VALUES (57, 'Сыр пармезан', 'Молочные');
-INSERT INTO public.products VALUES (58, 'Хлеб цельнозерновой', 'Хлеб');
-INSERT INTO public.products VALUES (59, 'Хлеб белый', 'Хлеб');
-INSERT INTO public.products VALUES (60, 'Мёд', 'Подсластители');
-INSERT INTO public.products VALUES (61, 'Изюм', 'Сухофрукты');
-INSERT INTO public.products VALUES (62, 'Курага', 'Сухофрукты');
-INSERT INTO public.products VALUES (63, 'Кукуруза', 'Овощи');
-INSERT INTO public.products VALUES (64, 'Зелёный горошек', 'Овощи');
-INSERT INTO public.products VALUES (65, 'Фасоль', 'Бобовые');
-INSERT INTO public.products VALUES (66, 'Соевый соус', 'Соусы');
-INSERT INTO public.products VALUES (67, 'Кетчуп', 'Соусы');
-INSERT INTO public.products VALUES (68, 'Растительное масло', 'Жиры');
-INSERT INTO public.products VALUES (69, 'Куриный бульон', 'Прочее');
-INSERT INTO public.products VALUES (70, 'Говяжий бульон', 'Прочее');
-INSERT INTO public.products VALUES (71, 'Кокосовое молоко', 'Молочные');
-INSERT INTO public.products VALUES (72, 'Рисовая лапша', 'Крупы');
-INSERT INTO public.products VALUES (73, 'Соус терияки', 'Соусы');
-INSERT INTO public.products VALUES (74, 'Имбирь', 'Овощи');
-INSERT INTO public.products VALUES (75, 'Лайм', 'Фрукты');
-INSERT INTO public.products VALUES (76, 'Кунжут', 'Семена');
-INSERT INTO public.products VALUES (77, 'Тофу', 'Бобовые');
-INSERT INTO public.products VALUES (78, 'Нут', 'Бобовые');
-INSERT INTO public.products VALUES (79, 'Кукурузная крупа', 'Крупы');
-INSERT INTO public.products VALUES (80, 'Полента', 'Крупы');
-INSERT INTO public.products VALUES (81, 'Сливочный сыр', 'Молочные');
-INSERT INTO public.products VALUES (82, 'Моцарелла', 'Молочные');
-INSERT INTO public.products VALUES (83, 'Рикотта', 'Молочные');
-INSERT INTO public.products VALUES (84, 'Креветки', 'Морепродукты');
-INSERT INTO public.products VALUES (85, 'Мидии', 'Морепродукты');
-INSERT INTO public.products VALUES (86, 'Цукини', 'Овощи');
-INSERT INTO public.products VALUES (87, 'Руккола', 'Зелень');
-INSERT INTO public.products VALUES (88, 'Авокадо', 'Фрукты');
-INSERT INTO public.products VALUES (89, 'Томатный соус', 'Соусы');
-INSERT INTO public.products VALUES (90, 'Базилик', 'Зелень');
-INSERT INTO public.products VALUES (91, 'Орегано', 'Зелень');
-INSERT INTO public.products VALUES (92, 'Лаваш', 'Хлеб');
-INSERT INTO public.products VALUES (93, 'Тортилья', 'Хлеб');
-INSERT INTO public.products VALUES (94, 'Грибы вешенки', 'Грибы');
-INSERT INTO public.products VALUES (95, 'Сыр фета', 'Молочные');
-INSERT INTO public.products VALUES (96, 'Гранат', 'Фрукты');
-INSERT INTO public.products VALUES (97, 'Кабачковая икра', 'Прочее');
-INSERT INTO public.products VALUES (98, 'Куриные бёдра', 'Мясо');
-INSERT INTO public.products VALUES (99, 'Филе индейки', 'Мясо');
-INSERT INTO public.products VALUES (100, 'Пекинская капуста', 'Овощи');
-INSERT INTO public.products VALUES (101, 'Чиа', 'Семена');
-INSERT INTO public.products VALUES (102, 'Льняные семена', 'Семена');
-INSERT INTO public.products VALUES (103, 'Финики', 'Сухофрукты');
-INSERT INTO public.products VALUES (104, 'Ячневая крупа', 'Крупы');
-INSERT INTO public.products VALUES (105, 'Крабовое мясо', 'Морепродукты');
-INSERT INTO public.products VALUES (106, 'Куриное яйцо перепелиное', 'Яйца');
-INSERT INTO public.products VALUES (107, 'Тыквенные семечки', 'Семена');
-INSERT INTO public.products VALUES (108, 'Какао', 'Подсластители');
-INSERT INTO public.products VALUES (109, 'Кокосовое масло', 'Жиры');
-INSERT INTO public.products VALUES (110, 'Салат айсберг', 'Овощи');
-INSERT INTO public.products VALUES (111, 'Сельдерей', 'Овощи');
-INSERT INTO public.products VALUES (112, 'Перец болгарский', 'Овощи');
-INSERT INTO public.products VALUES (113, 'Горчица', 'Соусы');
-INSERT INTO public.products VALUES (114, 'Йогурт греческий', 'Молочные');
-INSERT INTO public.products VALUES (115, 'Куриный фарш', 'Мясо');
-INSERT INTO public.products VALUES (116, 'Говяжий фарш', 'Мясо');
-INSERT INTO public.products VALUES (117, 'Киноа варёная', 'Крупы');
-INSERT INTO public.products VALUES (118, 'Рис бурый', 'Крупы');
-INSERT INTO public.products VALUES (119, 'Паста цельнозерновая', 'Крупы');
-INSERT INTO public.products VALUES (120, 'Соус песто', 'Соусы');
-INSERT INTO public.products VALUES (121, 'Мед горный', 'Подсластители');
-INSERT INTO public.products VALUES (122, 'Киви', 'Фрукты');
-INSERT INTO public.products VALUES (123, 'Манго', 'Фрукты');
-INSERT INTO public.products VALUES (124, 'Ананас', 'Фрукты');
-INSERT INTO public.products VALUES (125, 'Голубика', 'Ягоды');
-INSERT INTO public.products VALUES (126, 'Ежевика', 'Ягоды');
-INSERT INTO public.products VALUES (127, 'Персик', 'Фрукты');
-INSERT INTO public.products VALUES (128, 'Абрикос', 'Фрукты');
-INSERT INTO public.products VALUES (129, 'Кальмар', 'Морепродукты');
-INSERT INTO public.products VALUES (130, 'Лапша удон', 'Крупы');
-INSERT INTO public.products VALUES (131, 'Соус карри', 'Соусы');
-INSERT INTO public.products VALUES (132, 'Куриный соус азиатский', 'Соусы');
-INSERT INTO public.products VALUES (133, 'Капуста брокколи замороженная', 'Овощи');
-INSERT INTO public.products VALUES (134, 'Фасоль стручковая', 'Овощи');
-INSERT INTO public.products VALUES (135, 'Кукуруза консервированная', 'Овощи');
-INSERT INTO public.products VALUES (136, 'Томат черри', 'Овощи');
-INSERT INTO public.products VALUES (137, 'Сыр гауда', 'Молочные');
-INSERT INTO public.products VALUES (138, 'Сыр чеддер', 'Молочные');
-INSERT INTO public.products VALUES (139, 'Сметана 10%', 'Молочные');
-INSERT INTO public.products VALUES (140, 'Сметана 20%', 'Молочные');
-INSERT INTO public.products VALUES (141, 'Йогурт питьевой', 'Молочные');
-INSERT INTO public.products VALUES (142, 'Кефир 1%', 'Молочные');
-INSERT INTO public.products VALUES (143, 'Кефир 3.2%', 'Молочные');
-INSERT INTO public.products VALUES (144, 'Оливки', 'Овощи');
-INSERT INTO public.products VALUES (145, 'Маслины', 'Овощи');
-INSERT INTO public.products VALUES (146, 'Соус чесночный', 'Соусы');
-INSERT INTO public.products VALUES (147, 'Соус сырный', 'Соусы');
-INSERT INTO public.products VALUES (148, 'Куриные крылья', 'Мясо');
-INSERT INTO public.products VALUES (149, 'Грибы лесные', 'Грибы');
-INSERT INTO public.products VALUES (150, 'Сливки 33%', 'Молочные');
+INSERT INTO public.products VALUES (1, 'Оливковое масло', 'Жиры', 884, 0, 100, 0, 2, 0, false, false, true);
+INSERT INTO public.products VALUES (2, 'Перец чили', 'Овощи', 40, 2, 0.4, 9, 7, 15, true, false, false);
+INSERT INTO public.products VALUES (3, 'Лук репчатый', 'Овощи', 40, 1.1, 0.1, 9, 4, 10, false, false, false);
+INSERT INTO public.products VALUES (4, 'Сливочное масло', 'Жиры', 717, 0.9, 81, 0.1, 11, 0, false, false, true);
+INSERT INTO public.products VALUES (5, 'Молоко 2.5%', 'Молочные', 52, 3.2, 2.5, 4.8, 44, 30, false, false, false);
+INSERT INTO public.products VALUES (6, 'Овсяные хлопья (сухие)', 'Крупы', 370, 13, 7, 60, 2, 55, false, false, false);
+INSERT INTO public.products VALUES (7, 'Кабачок', 'Овощи', 17, 1.2, 0.3, 3, 8, 15, false, false, false);
+INSERT INTO public.products VALUES (8, 'Картофель', 'Овощи', 77, 2, 0.1, 17, 6, 80, false, false, false);
+INSERT INTO public.products VALUES (9, 'Гречка (сухая)', 'Крупы', 343, 13, 3.4, 72, 2, 50, false, false, false);
+INSERT INTO public.products VALUES (10, 'Говядина', 'Мясо', 187, 18.9, 12.4, 0, 72, 0, false, false, true);
+INSERT INTO public.products VALUES (11, 'Яйцо', 'Яйца', 143, 12.6, 9.5, 0.7, 124, 0, false, false, true);
+INSERT INTO public.products VALUES (12, 'Лимон', 'Фрукты', 29, 1.1, 0.3, 9, 2, 25, false, true, false);
+INSERT INTO public.products VALUES (13, 'Сахар', 'Подсластители', 387, 0, 0, 100, 1, 100, false, false, false);
+INSERT INTO public.products VALUES (14, 'Рис (сухой)', 'Крупы', 360, 7, 0.6, 78, 1, 70, false, false, false);
+INSERT INTO public.products VALUES (15, 'Куриная грудка', 'Мясо', 120, 22, 2.6, 0, 70, 0, false, false, false);
+INSERT INTO public.products VALUES (16, 'Морковь', 'Овощи', 41, 1, 0.2, 10, 69, 35, false, false, false);
+INSERT INTO public.products VALUES (17, 'Треска', 'Рыба', 82, 18, 0.7, 0, 60, 0, false, false, false);
+INSERT INTO public.products VALUES (18, 'Брокколи', 'Овощи', 34, 2.8, 0.4, 7, 33, 10, false, false, false);
+INSERT INTO public.products VALUES (19, 'Творог 5%', 'Молочные', 121, 16, 5, 3, 40, 30, false, false, false);
+INSERT INTO public.products VALUES (20, 'Йогурт натуральный', 'Молочные', 60, 10, 0.4, 3.6, 36, 35, false, false, false);
+INSERT INTO public.products VALUES (21, 'Индейка', 'Мясо', 135, 21, 5, 0, 65, 0, false, false, false);
+INSERT INTO public.products VALUES (22, 'Кролик', 'Мясо', 173, 21, 8, 0, 40, 0, false, false, true);
+INSERT INTO public.products VALUES (23, 'Лосось', 'Рыба', 208, 20, 13, 0, 60, 0, false, false, true);
+INSERT INTO public.products VALUES (24, 'Тунец', 'Рыба', 144, 23, 4.9, 0, 45, 0, false, false, false);
+INSERT INTO public.products VALUES (25, 'Форель', 'Рыба', 190, 20.5, 11.5, 0, 55, 0, false, false, true);
+INSERT INTO public.products VALUES (26, 'Кефир', 'Молочные', 53, 3, 2.5, 4, 45, 35, false, false, false);
+INSERT INTO public.products VALUES (27, 'Сметана', 'Молочные', 206, 2.5, 20, 3.5, 70, 30, false, false, true);
+INSERT INTO public.products VALUES (28, 'Сыр нежирный', 'Молочные', 250, 25, 15, 2, 800, 30, false, false, true);
+INSERT INTO public.products VALUES (29, 'Огурец', 'Овощи', 15, 0.7, 0.1, 3, 5, 15, false, false, false);
+INSERT INTO public.products VALUES (30, 'Помидор', 'Овощи', 18, 0.9, 0.2, 3.9, 5, 30, false, true, false);
+INSERT INTO public.products VALUES (31, 'Свекла', 'Овощи', 43, 1.6, 0.2, 9.6, 55, 65, false, false, false);
+INSERT INTO public.products VALUES (32, 'Капуста', 'Овощи', 25, 1.3, 0.1, 5.8, 15, 15, false, false, false);
+INSERT INTO public.products VALUES (33, 'Шпинат', 'Овощи', 23, 2.9, 0.4, 3.6, 80, 15, false, false, false);
+INSERT INTO public.products VALUES (34, 'Тыква', 'Овощи', 26, 1, 0.1, 6.5, 4, 65, false, false, false);
+INSERT INTO public.products VALUES (35, 'Баклажан', 'Овощи', 25, 1, 0.2, 5.7, 3, 20, false, false, false);
+INSERT INTO public.products VALUES (36, 'Яблоко', 'Фрукты', 52, 0.3, 0.2, 14, 1, 35, false, true, false);
+INSERT INTO public.products VALUES (37, 'Груша', 'Фрукты', 57, 0.4, 0.3, 15, 1, 35, false, false, false);
+INSERT INTO public.products VALUES (38, 'Черника', 'Ягоды', 57, 0.7, 0.3, 14.5, 1, 40, false, false, false);
+INSERT INTO public.products VALUES (39, 'Клубника', 'Ягоды', 32, 0.7, 0.3, 7.7, 1, 40, false, true, false);
+INSERT INTO public.products VALUES (40, 'Булгур', 'Крупы', 342, 12, 1.3, 76, 5, 45, false, false, false);
+INSERT INTO public.products VALUES (41, 'Киноа', 'Крупы', 368, 14, 6, 64, 5, 50, false, false, false);
+INSERT INTO public.products VALUES (42, 'Перловка', 'Крупы', 315, 9.3, 1.1, 67, 5, 30, false, false, false);
+INSERT INTO public.products VALUES (43, 'Чечевица', 'Бобовые', 353, 25, 1.1, 60, 5, 30, false, false, false);
+INSERT INTO public.products VALUES (44, 'Миндаль', 'Орехи', 579, 21, 50, 22, 1, 15, false, false, true);
+INSERT INTO public.products VALUES (45, 'Грецкий орех', 'Орехи', 654, 15, 65, 14, 2, 15, false, false, true);
+INSERT INTO public.products VALUES (46, 'Льняное масло', 'Жиры', 884, 0, 100, 0, 0, 0, false, false, true);
+INSERT INTO public.products VALUES (47, 'Майонез', 'Соусы', 680, 1, 75, 2.5, 800, 10, false, false, true);
+INSERT INTO public.products VALUES (48, 'Маргарин', 'Жиры', 720, 0, 80, 0.5, 800, 0, false, false, true);
+INSERT INTO public.products VALUES (49, 'Колбаса', 'Мясо', 300, 12, 28, 1.5, 1200, 0, false, false, true);
+INSERT INTO public.products VALUES (50, 'Алкоголь', 'Напитки', 70, 0, 0, 0, 5, 15, false, true, false);
+INSERT INTO public.products VALUES (51, 'Шампиньоны', 'Грибы', 22, 3.1, 0.3, 3.3, 5, 10, false, false, false);
+INSERT INTO public.products VALUES (52, 'Сливки 10%', 'Молочные', 118, 2.8, 10, 4, 50, 30, false, false, true);
+INSERT INTO public.products VALUES (53, 'Сливки 20%', 'Молочные', 205, 2.5, 20, 3.5, 55, 30, false, false, true);
+INSERT INTO public.products VALUES (54, 'Паста', 'Крупы', 350, 12, 1.5, 70, 3, 50, false, false, false);
+INSERT INTO public.products VALUES (55, 'Петрушка', 'Зелень', 36, 3, 0.8, 6, 50, 15, false, false, false);
+INSERT INTO public.products VALUES (56, 'Укроп', 'Зелень', 43, 3.5, 1.1, 7, 61, 15, false, false, false);
+INSERT INTO public.products VALUES (57, 'Сыр пармезан', 'Молочные', 431, 38, 29, 4, 1600, 20, false, false, true);
+INSERT INTO public.products VALUES (58, 'Хлеб цельнозерновой', 'Хлеб', 247, 9, 3.5, 45, 500, 45, false, false, false);
+INSERT INTO public.products VALUES (59, 'Хлеб белый', 'Хлеб', 265, 8, 3, 50, 500, 70, false, false, false);
+INSERT INTO public.products VALUES (60, 'Мёд', 'Подсластители', 304, 0.3, 0, 82, 4, 60, false, false, false);
+INSERT INTO public.products VALUES (61, 'Изюм', 'Сухофрукты', 299, 3.1, 0.5, 79, 11, 65, false, false, false);
+INSERT INTO public.products VALUES (62, 'Курага', 'Сухофрукты', 241, 3.4, 0.5, 63, 25, 55, false, false, false);
+INSERT INTO public.products VALUES (63, 'Кукуруза', 'Овощи', 86, 3.2, 1.2, 19, 1, 55, false, false, false);
+INSERT INTO public.products VALUES (64, 'Зелёный горошек', 'Овощи', 81, 5.4, 0.4, 14, 2, 45, false, false, false);
+INSERT INTO public.products VALUES (65, 'Фасоль', 'Бобовые', 333, 21, 1.5, 60, 5, 30, false, false, false);
+INSERT INTO public.products VALUES (66, 'Соевый соус', 'Соусы', 53, 8.1, 0, 4.9, 5500, 15, false, false, false);
+INSERT INTO public.products VALUES (67, 'Кетчуп', 'Соусы', 110, 1.5, 0.2, 27, 1100, 45, false, true, false);
+INSERT INTO public.products VALUES (68, 'Растительное масло', 'Жиры', 884, 0, 100, 0, 0, 0, false, false, true);
+INSERT INTO public.products VALUES (69, 'Куриный бульон', 'Прочее', 10, 1, 0.5, 0.5, 350, 0, false, false, false);
+INSERT INTO public.products VALUES (70, 'Говяжий бульон', 'Прочее', 12, 1.2, 0.6, 0.6, 380, 0, false, false, false);
+INSERT INTO public.products VALUES (71, 'Кокосовое молоко', 'Молочные', 230, 2.3, 23.8, 5.5, 15, 40, false, false, true);
+INSERT INTO public.products VALUES (72, 'Рисовая лапша', 'Крупы', 364, 5, 1, 81, 10, 60, false, false, false);
+INSERT INTO public.products VALUES (73, 'Соус терияки', 'Соусы', 89, 4.5, 0, 18, 4300, 20, false, false, false);
+INSERT INTO public.products VALUES (74, 'Имбирь', 'Овощи', 80, 1.8, 0.8, 18, 13, 15, true, true, false);
+INSERT INTO public.products VALUES (75, 'Лайм', 'Фрукты', 30, 0.7, 0.2, 11, 2, 30, false, true, false);
+INSERT INTO public.products VALUES (76, 'Кунжут', 'Семена', 573, 17.7, 49.7, 23.5, 11, 35, false, false, true);
+INSERT INTO public.products VALUES (77, 'Тофу', 'Бобовые', 76, 8.1, 4.8, 1.9, 7, 15, false, false, false);
+INSERT INTO public.products VALUES (78, 'Нут', 'Бобовые', 364, 19, 6, 61, 24, 35, false, false, false);
+INSERT INTO public.products VALUES (79, 'Кукурузная крупа', 'Крупы', 365, 8.3, 1.2, 78, 2, 70, false, false, false);
+INSERT INTO public.products VALUES (80, 'Полента', 'Крупы', 370, 8, 1.5, 80, 2, 70, false, false, false);
+INSERT INTO public.products VALUES (81, 'Сливочный сыр', 'Молочные', 342, 6, 34, 4, 350, 30, false, false, true);
+INSERT INTO public.products VALUES (82, 'Моцарелла', 'Молочные', 280, 22, 20, 2.2, 600, 30, false, false, true);
+INSERT INTO public.products VALUES (83, 'Рикотта', 'Молочные', 174, 11, 13, 3, 100, 30, false, false, true);
+INSERT INTO public.products VALUES (84, 'Креветки', 'Морепродукты', 99, 24, 0.5, 0, 170, 0, false, false, false);
+INSERT INTO public.products VALUES (85, 'Мидии', 'Морепродукты', 86, 12, 2, 3, 200, 0, false, false, false);
+INSERT INTO public.products VALUES (86, 'Цукини', 'Овощи', 17, 1.2, 0.3, 3.1, 8, 15, false, false, false);
+INSERT INTO public.products VALUES (87, 'Руккола', 'Зелень', 25, 2.6, 0.7, 3.7, 45, 15, true, false, false);
+INSERT INTO public.products VALUES (88, 'Авокадо', 'Фрукты', 160, 2, 15, 9, 7, 15, false, false, true);
+INSERT INTO public.products VALUES (89, 'Томатный соус', 'Соусы', 50, 1.5, 0.5, 10, 450, 35, false, true, false);
+INSERT INTO public.products VALUES (90, 'Базилик', 'Зелень', 44, 3.2, 0.6, 8, 5, 10, false, false, false);
+INSERT INTO public.products VALUES (91, 'Орегано', 'Зелень', 265, 9, 4.3, 68, 10, 10, false, false, false);
+INSERT INTO public.products VALUES (92, 'Лаваш', 'Хлеб', 275, 9, 1, 55, 450, 65, false, false, false);
+INSERT INTO public.products VALUES (93, 'Тортилья', 'Хлеб', 300, 8, 7, 50, 400, 65, false, false, true);
+INSERT INTO public.products VALUES (94, 'Грибы вешенки', 'Грибы', 33, 3.3, 0.4, 6, 10, 10, false, false, false);
+INSERT INTO public.products VALUES (95, 'Сыр фета', 'Молочные', 264, 14, 21, 4, 1100, 20, false, false, true);
+INSERT INTO public.products VALUES (96, 'Гранат', 'Фрукты', 83, 1.7, 1.2, 19, 3, 35, false, true, false);
+INSERT INTO public.products VALUES (97, 'Кабачковая икра', 'Прочее', 97, 1.2, 7, 8, 450, 20, false, false, false);
+INSERT INTO public.products VALUES (98, 'Куриные бёдра', 'Мясо', 210, 18, 15, 0, 80, 0, false, false, true);
+INSERT INTO public.products VALUES (99, 'Филе индейки', 'Мясо', 120, 24, 2, 0, 60, 0, false, false, false);
+INSERT INTO public.products VALUES (100, 'Пекинская капуста', 'Овощи', 16, 1.2, 0.2, 3, 20, 15, false, false, false);
+INSERT INTO public.products VALUES (101, 'Чиа', 'Семена', 486, 16.5, 30.7, 42.1, 5, 15, false, false, true);
+INSERT INTO public.products VALUES (102, 'Льняные семена', 'Семена', 534, 18.3, 42.2, 28.9, 30, 15, false, false, true);
+INSERT INTO public.products VALUES (103, 'Финики', 'Сухофрукты', 282, 2.5, 0.4, 75, 1, 70, false, false, false);
+INSERT INTO public.products VALUES (104, 'Ячневая крупа', 'Крупы', 315, 10, 1.3, 65, 5, 35, false, false, false);
+INSERT INTO public.products VALUES (105, 'Крабовое мясо', 'Морепродукты', 87, 18, 1, 0, 400, 0, false, false, false);
+INSERT INTO public.products VALUES (106, 'Куриное яйцо перепелиное', 'Яйца', 158, 13, 11, 0.6, 140, 0, false, false, true);
+INSERT INTO public.products VALUES (107, 'Тыквенные семечки', 'Семена', 559, 30, 49, 11, 7, 25, false, false, true);
+INSERT INTO public.products VALUES (108, 'Какао', 'Подсластители', 228, 20, 14, 58, 5, 20, false, false, false);
+INSERT INTO public.products VALUES (109, 'Кокосовое масло', 'Жиры', 862, 0, 100, 0, 0, 0, false, false, true);
+INSERT INTO public.products VALUES (110, 'Салат айсберг', 'Овощи', 14, 0.9, 0.1, 2.9, 10, 15, false, false, false);
+INSERT INTO public.products VALUES (111, 'Сельдерей', 'Овощи', 16, 0.7, 0.2, 3, 80, 15, false, false, false);
+INSERT INTO public.products VALUES (112, 'Перец болгарский', 'Овощи', 31, 1, 0.3, 6, 2, 35, false, false, false);
+INSERT INTO public.products VALUES (113, 'Горчица', 'Соусы', 66, 4, 3, 6, 1100, 20, true, true, false);
+INSERT INTO public.products VALUES (114, 'Йогурт греческий', 'Молочные', 59, 10, 0.4, 3.6, 35, 35, false, false, false);
+INSERT INTO public.products VALUES (115, 'Куриный фарш', 'Мясо', 160, 18, 9, 0, 70, 0, false, false, true);
+INSERT INTO public.products VALUES (116, 'Говяжий фарш', 'Мясо', 250, 17, 20, 0, 75, 0, false, false, true);
+INSERT INTO public.products VALUES (117, 'Киноа варёная', 'Крупы', 120, 4.4, 1.9, 21.3, 5, 50, false, false, false);
+INSERT INTO public.products VALUES (118, 'Рис бурый', 'Крупы', 370, 7.5, 2.5, 75, 3, 50, false, false, false);
+INSERT INTO public.products VALUES (119, 'Паста цельнозерновая', 'Крупы', 350, 13, 2, 68, 5, 45, false, false, false);
+INSERT INTO public.products VALUES (120, 'Соус песто', 'Соусы', 490, 5, 50, 6, 800, 15, false, false, true);
+INSERT INTO public.products VALUES (121, 'Мед горный', 'Подсластители', 304, 0.3, 0, 82, 4, 60, false, false, false);
+INSERT INTO public.products VALUES (122, 'Киви', 'Фрукты', 61, 1.1, 0.5, 14.7, 3, 50, false, true, false);
+INSERT INTO public.products VALUES (123, 'Манго', 'Фрукты', 60, 0.8, 0.4, 15, 1, 55, false, false, false);
+INSERT INTO public.products VALUES (124, 'Ананас', 'Фрукты', 50, 0.5, 0.1, 13, 1, 60, false, true, false);
+INSERT INTO public.products VALUES (125, 'Голубика', 'Ягоды', 57, 0.7, 0.3, 14.5, 1, 40, false, false, false);
+INSERT INTO public.products VALUES (126, 'Ежевика', 'Ягоды', 43, 1.4, 0.5, 10, 1, 40, false, false, false);
+INSERT INTO public.products VALUES (127, 'Персик', 'Фрукты', 39, 0.9, 0.3, 9.5, 1, 35, false, false, false);
+INSERT INTO public.products VALUES (128, 'Абрикос', 'Фрукты', 48, 1.4, 0.4, 11, 1, 35, false, false, false);
+INSERT INTO public.products VALUES (129, 'Кальмар', 'Морепродукты', 92, 15, 1.4, 3.1, 200, 0, false, false, false);
+INSERT INTO public.products VALUES (130, 'Лапша удон', 'Крупы', 138, 4, 0.5, 29, 500, 55, false, false, false);
+INSERT INTO public.products VALUES (131, 'Соус карри', 'Соусы', 120, 1.5, 8, 10, 1200, 30, true, false, false);
+INSERT INTO public.products VALUES (132, 'Куриный соус азиатский', 'Соусы', 90, 5, 2, 15, 2000, 20, false, false, false);
+INSERT INTO public.products VALUES (133, 'Капуста брокколи замороженная', 'Овощи', 34, 2.8, 0.4, 7, 33, 10, false, false, false);
+INSERT INTO public.products VALUES (134, 'Фасоль стручковая', 'Овощи', 31, 1.8, 0.2, 7, 5, 30, false, false, false);
+INSERT INTO public.products VALUES (135, 'Кукуруза консервированная', 'Овощи', 86, 3.2, 1.2, 19, 250, 55, false, false, false);
+INSERT INTO public.products VALUES (136, 'Томат черри', 'Овощи', 18, 0.9, 0.2, 3.9, 5, 30, false, true, false);
+INSERT INTO public.products VALUES (137, 'Сыр гауда', 'Молочные', 356, 25, 27, 2, 800, 20, false, false, true);
+INSERT INTO public.products VALUES (138, 'Сыр чеддер', 'Молочные', 404, 25, 33, 1.3, 620, 20, false, false, true);
+INSERT INTO public.products VALUES (139, 'Сметана 10%', 'Молочные', 115, 2.5, 10, 3, 50, 30, false, false, true);
+INSERT INTO public.products VALUES (140, 'Сметана 20%', 'Молочные', 206, 2.5, 20, 3.5, 70, 30, false, false, true);
+INSERT INTO public.products VALUES (141, 'Йогурт питьевой', 'Молочные', 70, 3, 1.5, 11, 50, 35, false, false, false);
+INSERT INTO public.products VALUES (142, 'Кефир 1%', 'Молочные', 40, 3, 1, 4, 45, 35, false, false, false);
+INSERT INTO public.products VALUES (143, 'Кефир 3.2%', 'Молочные', 60, 3, 3.2, 4, 45, 35, false, false, false);
+INSERT INTO public.products VALUES (144, 'Оливки', 'Овощи', 115, 0.8, 10.7, 6.3, 1600, 15, false, false, true);
+INSERT INTO public.products VALUES (145, 'Маслины', 'Овощи', 145, 1, 15.3, 3.8, 1800, 15, false, false, true);
+INSERT INTO public.products VALUES (146, 'Соус чесночный', 'Соусы', 150, 2, 10, 12, 1200, 20, true, false, false);
+INSERT INTO public.products VALUES (147, 'Соус сырный', 'Соусы', 250, 8, 20, 8, 900, 25, false, false, true);
+INSERT INTO public.products VALUES (148, 'Куриные крылья', 'Мясо', 203, 18, 15, 0, 80, 0, false, false, true);
+INSERT INTO public.products VALUES (149, 'Грибы лесные', 'Грибы', 25, 3, 0.5, 4, 5, 10, false, false, false);
+INSERT INTO public.products VALUES (150, 'Сливки 33%', 'Молочные', 330, 2.2, 33, 3, 55, 30, false, false, true);
 
 
 --
@@ -1790,530 +1430,530 @@ INSERT INTO public.recipe_diets VALUES (65, 5);
 -- Data for Name: recipe_ingredients; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-INSERT INTO public.recipe_ingredients VALUES (1, 2, 20, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (2, 2, 6, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (3, 2, 2, 200, 'г');
-INSERT INTO public.recipe_ingredients VALUES (4, 1, 1, 200, 'г');
-INSERT INTO public.recipe_ingredients VALUES (5, 1, 5, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (6, 3, 4, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (7, 3, 11, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (18, 4, 1, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (19, 4, 5, 70, 'г');
-INSERT INTO public.recipe_ingredients VALUES (20, 4, 10, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (21, 4, 9, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (22, 4, 69, 300, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (23, 5, 7, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (24, 5, 36, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (25, 5, 12, 200, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (26, 6, 1, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (27, 6, 5, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (28, 6, 9, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (29, 6, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (30, 6, 69, 600, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (31, 7, 3, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (32, 7, 4, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (33, 7, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (34, 8, 8, 200, 'г');
-INSERT INTO public.recipe_ingredients VALUES (35, 8, 1, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (36, 8, 12, 50, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (37, 9, 5, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (38, 9, 9, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (39, 9, 8, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (40, 9, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (41, 9, 69, 700, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (45, 11, 6, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (46, 11, 1, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (47, 11, 9, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (48, 12, 4, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (49, 12, 12, 50, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (50, 13, 10, 250, 'г');
-INSERT INTO public.recipe_ingredients VALUES (51, 13, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (52, 13, 52, 50, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (53, 13, 69, 400, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (54, 14, 21, 130, 'г');
-INSERT INTO public.recipe_ingredients VALUES (55, 14, 5, 70, 'г');
-INSERT INTO public.recipe_ingredients VALUES (56, 14, 9, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (57, 14, 69, 200, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (58, 15, 1, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (59, 15, 7, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (60, 15, 9, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (61, 15, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (62, 15, 69, 700, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (63, 16, 13, 200, 'г');
-INSERT INTO public.recipe_ingredients VALUES (64, 16, 4, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (65, 16, 15, 15, 'г');
-INSERT INTO public.recipe_ingredients VALUES (66, 17, 1, 200, 'г');
-INSERT INTO public.recipe_ingredients VALUES (67, 17, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (68, 17, 4, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (69, 18, 10, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (70, 18, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (71, 18, 8, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (72, 18, 32, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (73, 18, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (74, 18, 89, 50, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (75, 19, 42, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (76, 19, 8, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (77, 19, 9, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (78, 19, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (79, 19, 69, 700, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (80, 20, 3, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (81, 20, 9, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (82, 20, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (83, 20, 68, 5, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (84, 20, 69, 100, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (85, 21, 5, 70, 'г');
-INSERT INTO public.recipe_ingredients VALUES (86, 21, 12, 400, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (87, 21, 15, 10, 'г');
-INSERT INTO public.recipe_ingredients VALUES (88, 22, 54, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (89, 22, 1, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (90, 22, 51, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (91, 22, 52, 100, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (92, 22, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (93, 22, 68, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (94, 22, 28, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (95, 23, 54, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (96, 23, 89, 100, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (97, 23, 90, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (98, 23, 68, 5, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (99, 23, 28, 20, 'г');
-INSERT INTO public.recipe_ingredients VALUES (100, 24, 40, 70, 'г');
-INSERT INTO public.recipe_ingredients VALUES (101, 24, 1, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (102, 24, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (103, 24, 86, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (104, 24, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (105, 24, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (106, 24, 69, 100, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (107, 25, 3, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (108, 25, 8, 180, 'г');
-INSERT INTO public.recipe_ingredients VALUES (109, 25, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (110, 25, 16, 5, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (112, 26, 1, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (113, 26, 29, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (114, 26, 30, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (115, 26, 110, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (116, 26, 14, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (117, 26, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (119, 27, 4, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (120, 27, 28, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (121, 27, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (122, 27, 56, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (123, 27, 12, 30, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (124, 27, 68, 5, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (125, 28, 6, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (126, 28, 51, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (127, 28, 20, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (128, 28, 68, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (129, 28, 69, 200, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (130, 29, 4, 200, 'г');
-INSERT INTO public.recipe_ingredients VALUES (131, 29, 8, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (132, 29, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (133, 29, 52, 50, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (134, 29, 69, 500, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (135, 30, 1, 130, 'г');
-INSERT INTO public.recipe_ingredients VALUES (136, 30, 52, 100, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (111, 25, 19, 1, 'шт');
-INSERT INTO public.recipe_ingredients VALUES (118, 26, 19, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (137, 30, 5, 70, 'г');
-INSERT INTO public.recipe_ingredients VALUES (138, 30, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (139, 30, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (140, 30, 28, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (197, 31, 5, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (198, 31, 1, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (199, 31, 112, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (200, 31, 9, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (201, 31, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (202, 31, 68, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (203, 31, 66, 15, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (204, 32, 130, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (205, 32, 86, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (206, 32, 112, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (207, 32, 9, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (208, 32, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (209, 32, 66, 12, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (210, 33, 1, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (211, 33, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (212, 33, 73, 30, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (213, 34, 72, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (214, 34, 1, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (215, 34, 9, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (216, 34, 112, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (217, 34, 69, 400, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (218, 35, 77, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (219, 35, 86, 70, 'г');
-INSERT INTO public.recipe_ingredients VALUES (220, 35, 112, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (221, 35, 68, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (222, 35, 66, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (223, 36, 5, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (224, 36, 84, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (225, 36, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (226, 36, 66, 5, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (227, 37, 1, 130, 'г');
-INSERT INTO public.recipe_ingredients VALUES (228, 37, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (229, 37, 68, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (230, 37, 131, 25, 'г');
-INSERT INTO public.recipe_ingredients VALUES (231, 37, 71, 100, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (232, 38, 86, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (233, 38, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (234, 38, 9, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (235, 38, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (236, 38, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (237, 38, 66, 15, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (238, 39, 5, 70, 'г');
-INSERT INTO public.recipe_ingredients VALUES (239, 39, 4, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (240, 39, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (241, 39, 66, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (242, 39, 20, 20, 'г');
-INSERT INTO public.recipe_ingredients VALUES (243, 40, 54, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (244, 40, 1, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (245, 40, 74, 10, 'г');
-INSERT INTO public.recipe_ingredients VALUES (246, 40, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (247, 40, 68, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (248, 40, 66, 15, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (249, 41, 24, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (250, 41, 29, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (251, 41, 30, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (252, 41, 110, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (253, 41, 14, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (255, 41, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (262, 43, 40, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (263, 43, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (264, 43, 86, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (265, 43, 9, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (266, 43, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (267, 43, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (268, 43, 69, 100, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (274, 45, 43, 70, 'г');
-INSERT INTO public.recipe_ingredients VALUES (275, 45, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (276, 45, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (277, 45, 8, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (278, 45, 69, 700, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (279, 46, 41, 70, 'г');
-INSERT INTO public.recipe_ingredients VALUES (280, 46, 1, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (281, 46, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (282, 46, 86, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (283, 46, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (284, 46, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (285, 46, 69, 150, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (286, 47, 88, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (287, 47, 29, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (288, 47, 30, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (289, 47, 110, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (290, 47, 14, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (292, 48, 3, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (293, 48, 86, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (294, 48, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (295, 48, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (296, 48, 16, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (298, 49, 54, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (299, 49, 28, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (300, 49, 12, 30, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (301, 49, 17, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (302, 50, 1, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (303, 50, 8, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (304, 50, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (305, 50, 86, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (306, 50, 32, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (307, 50, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (308, 50, 89, 50, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (309, 50, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (310, 50, 69, 200, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (311, 51, 5, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (312, 51, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (313, 51, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (314, 51, 64, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (315, 51, 68, 5, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (316, 51, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (317, 52, 1, 130, 'г');
-INSERT INTO public.recipe_ingredients VALUES (318, 52, 4, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (319, 52, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (320, 52, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (321, 52, 69, 100, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (322, 53, 4, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (323, 53, 51, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (324, 53, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (325, 53, 12, 30, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (326, 53, 68, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (327, 54, 8, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (328, 54, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (254, 41, 19, 5, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (291, 47, 19, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (297, 48, 19, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (329, 54, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (330, 54, 69, 600, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (331, 54, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (332, 55, 54, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (333, 55, 86, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (334, 55, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (335, 55, 9, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (336, 55, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (337, 55, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (338, 55, 89, 50, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (357, 59, 8, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (358, 59, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (359, 59, 32, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (360, 59, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (361, 59, 69, 700, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (362, 59, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (380, 63, 1, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (381, 63, 20, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (382, 63, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (383, 63, 69, 150, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (384, 63, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (385, 64, 40, 70, 'г');
-INSERT INTO public.recipe_ingredients VALUES (386, 64, 1, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (387, 64, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (388, 64, 86, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (389, 64, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (390, 64, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (391, 64, 69, 150, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (396, 66, 1, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (397, 66, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (398, 66, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (399, 66, 8, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (400, 66, 69, 700, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (401, 66, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (402, 67, 54, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (403, 67, 51, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (404, 67, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (405, 67, 52, 80, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (406, 67, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (407, 67, 28, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (408, 68, 4, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (409, 68, 29, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (410, 68, 30, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (411, 68, 110, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (412, 68, 14, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (413, 68, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (420, 70, 4, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (421, 70, 9, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (422, 70, 86, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (423, 70, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (424, 71, 1, 130, 'г');
-INSERT INTO public.recipe_ingredients VALUES (425, 71, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (426, 71, 86, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (427, 71, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (428, 71, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (429, 71, 69, 150, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (436, 73, 54, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (437, 73, 89, 100, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (438, 73, 68, 5, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (439, 73, 90, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (440, 73, 28, 20, 'г');
-INSERT INTO public.recipe_ingredients VALUES (441, 74, 3, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (442, 74, 29, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (443, 74, 30, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (444, 74, 110, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (445, 74, 14, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (446, 74, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (453, 76, 5, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (454, 76, 4, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (455, 76, 64, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (456, 76, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (457, 76, 68, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (458, 76, 66, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (459, 77, 1, 180, 'г');
-INSERT INTO public.recipe_ingredients VALUES (460, 77, 8, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (461, 77, 9, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (462, 77, 20, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (463, 77, 16, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (464, 77, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (465, 78, 8, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (466, 78, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (467, 78, 32, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (468, 78, 86, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (469, 78, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (470, 78, 69, 700, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (471, 78, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (472, 79, 54, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (473, 79, 28, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (474, 79, 12, 50, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (475, 79, 17, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (476, 79, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (477, 79, 56, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (478, 80, 41, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (479, 80, 29, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (480, 80, 30, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (481, 80, 88, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (482, 80, 14, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (497, 83, 4, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (498, 83, 8, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (499, 83, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (500, 83, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (501, 83, 69, 700, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (508, 85, 29, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (509, 85, 30, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (510, 85, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (511, 85, 28, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (512, 85, 14, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (513, 85, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (514, 86, 1, 130, 'г');
-INSERT INTO public.recipe_ingredients VALUES (515, 86, 5, 70, 'г');
-INSERT INTO public.recipe_ingredients VALUES (516, 86, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (517, 86, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (518, 86, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (519, 86, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (520, 86, 69, 200, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (521, 87, 1, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (522, 87, 8, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (523, 87, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (524, 87, 32, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (525, 87, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (526, 87, 69, 800, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (527, 88, 54, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (528, 88, 51, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (529, 88, 52, 100, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (530, 88, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (531, 88, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (532, 88, 28, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (533, 89, 24, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (534, 89, 4, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (535, 89, 29, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (536, 89, 30, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (537, 89, 14, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (538, 89, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (539, 90, 5, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (540, 90, 3, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (541, 90, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (542, 90, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (543, 90, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (544, 90, 69, 200, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (545, 91, 40, 70, 'г');
-INSERT INTO public.recipe_ingredients VALUES (546, 91, 1, 130, 'г');
-INSERT INTO public.recipe_ingredients VALUES (547, 91, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (548, 91, 86, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (549, 91, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (550, 91, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (551, 91, 69, 150, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (552, 92, 43, 70, 'г');
-INSERT INTO public.recipe_ingredients VALUES (553, 92, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (554, 92, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (555, 92, 8, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (556, 92, 69, 700, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (557, 92, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (558, 93, 54, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (559, 93, 86, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (560, 93, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (561, 93, 20, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (562, 93, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (563, 93, 28, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (564, 93, 52, 80, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (565, 94, 1, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (566, 94, 88, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (567, 94, 29, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (568, 94, 30, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (569, 94, 110, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (570, 94, 14, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (579, 96, 1, 130, 'г');
-INSERT INTO public.recipe_ingredients VALUES (580, 96, 51, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (581, 96, 20, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (582, 96, 52, 80, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (583, 96, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (584, 96, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (592, 98, 54, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (593, 98, 89, 100, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (594, 98, 68, 5, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (595, 98, 90, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (596, 98, 28, 20, 'г');
-INSERT INTO public.recipe_ingredients VALUES (483, 80, 19, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (571, 94, 19, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (603, 100, 5, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (604, 100, 3, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (605, 100, 9, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (606, 100, 112, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (607, 100, 20, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (608, 100, 68, 8, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (609, 100, 69, 200, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (610, 72, 115, 200, 'г');
-INSERT INTO public.recipe_ingredients VALUES (611, 72, 8, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (612, 72, 9, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (613, 72, 20, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (614, 72, 69, 800, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (615, 72, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (616, 97, 133, 300, 'г');
-INSERT INTO public.recipe_ingredients VALUES (617, 97, 8, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (618, 97, 69, 600, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (619, 97, 52, 100, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (620, 57, 42, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (621, 57, 1, 200, 'г');
-INSERT INTO public.recipe_ingredients VALUES (622, 57, 20, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (623, 57, 9, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (624, 57, 68, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (625, 57, 69, 400, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (626, 69, 5, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (627, 69, 84, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (628, 69, 85, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (629, 69, 129, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (630, 69, 68, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (631, 69, 66, 15, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (632, 95, 5, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (633, 95, 78, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (634, 95, 33, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (635, 95, 20, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (636, 95, 68, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (637, 95, 89, 50, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (638, 44, 58, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (639, 44, 88, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (640, 44, 4, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (642, 65, 7, 40, 'г');
-INSERT INTO public.recipe_ingredients VALUES (643, 65, 14, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (644, 65, 39, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (650, 60, 54, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (651, 60, 84, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (652, 60, 16, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (653, 60, 20, 10, 'г');
-INSERT INTO public.recipe_ingredients VALUES (654, 60, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (655, 84, 54, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (656, 84, 4, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (657, 84, 16, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (658, 84, 57, 20, 'г');
-INSERT INTO public.recipe_ingredients VALUES (659, 58, 79, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (660, 58, 34, 200, 'г');
-INSERT INTO public.recipe_ingredients VALUES (661, 58, 12, 400, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (662, 58, 60, 15, 'г');
-INSERT INTO public.recipe_ingredients VALUES (663, 75, 41, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (664, 75, 20, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (665, 75, 9, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (666, 75, 112, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (667, 75, 68, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (668, 56, 84, 120, 'г');
-INSERT INTO public.recipe_ingredients VALUES (669, 56, 123, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (670, 56, 88, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (671, 56, 110, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (672, 56, 14, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (673, 56, 75, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (674, 61, 29, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (675, 61, 30, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (676, 61, 112, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (677, 61, 144, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (678, 61, 16, 15, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (679, 61, 91, 2, 'г');
-INSERT INTO public.recipe_ingredients VALUES (680, 99, 87, 60, 'г');
-INSERT INTO public.recipe_ingredients VALUES (681, 99, 37, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (682, 99, 57, 30, 'г');
-INSERT INTO public.recipe_ingredients VALUES (683, 99, 44, 20, 'г');
-INSERT INTO public.recipe_ingredients VALUES (684, 99, 16, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (685, 10, 3, 300, 'г');
-INSERT INTO public.recipe_ingredients VALUES (686, 10, 4, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (687, 10, 55, 10, 'г');
-INSERT INTO public.recipe_ingredients VALUES (688, 82, 3, 250, 'г');
-INSERT INTO public.recipe_ingredients VALUES (689, 82, 9, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (690, 82, 20, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (691, 82, 89, 50, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (692, 82, 68, 15, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (693, 62, 3, 200, 'г');
-INSERT INTO public.recipe_ingredients VALUES (694, 62, 8, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (695, 62, 20, 50, 'г');
-INSERT INTO public.recipe_ingredients VALUES (696, 62, 86, 80, 'г');
-INSERT INTO public.recipe_ingredients VALUES (697, 62, 69, 700, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (698, 42, 115, 300, 'г');
-INSERT INTO public.recipe_ingredients VALUES (699, 42, 86, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (700, 42, 9, 100, 'г');
-INSERT INTO public.recipe_ingredients VALUES (701, 42, 16, 10, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (702, 81, 98, 400, 'г');
-INSERT INTO public.recipe_ingredients VALUES (703, 81, 20, 150, 'г');
-INSERT INTO public.recipe_ingredients VALUES (704, 81, 68, 15, 'мл');
-INSERT INTO public.recipe_ingredients VALUES (705, 81, 55, 5, 'г');
-INSERT INTO public.recipe_ingredients VALUES (641, 44, 19, 5, 'мл');
+INSERT INTO public.recipe_ingredients VALUES (1, 2, 50, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (2, 2, 100, 'г', 9);
+INSERT INTO public.recipe_ingredients VALUES (3, 2, 200, 'г', 10);
+INSERT INTO public.recipe_ingredients VALUES (4, 1, 200, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (5, 1, 100, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (6, 3, 150, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (7, 3, 100, 'г', 18);
+INSERT INTO public.recipe_ingredients VALUES (18, 4, 120, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (19, 4, 70, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (20, 4, 100, 'г', 7);
+INSERT INTO public.recipe_ingredients VALUES (21, 4, 30, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (22, 4, 300, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (137, 30, 70, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (138, 30, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (139, 30, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (140, 30, 30, 'г', 28);
+INSERT INTO public.recipe_ingredients VALUES (197, 31, 80, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (198, 31, 120, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (199, 31, 50, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (200, 31, 40, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (201, 31, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (204, 32, 100, 'г', 130);
+INSERT INTO public.recipe_ingredients VALUES (329, 54, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (330, 54, 600, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (331, 54, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (332, 55, 80, 'г', 54);
+INSERT INTO public.recipe_ingredients VALUES (333, 55, 60, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (334, 55, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (335, 55, 40, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (336, 55, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (337, 55, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (338, 55, 50, 'мл', 89);
+INSERT INTO public.recipe_ingredients VALUES (357, 59, 100, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (358, 59, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (359, 59, 80, 'г', 32);
+INSERT INTO public.recipe_ingredients VALUES (360, 59, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (361, 59, 700, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (362, 59, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (380, 63, 150, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (381, 63, 50, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (382, 63, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (383, 63, 150, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (384, 63, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (385, 64, 70, 'г', 40);
+INSERT INTO public.recipe_ingredients VALUES (386, 64, 120, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (387, 64, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (388, 64, 60, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (389, 64, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (390, 64, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (391, 64, 150, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (396, 66, 120, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (397, 66, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (398, 66, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (399, 66, 100, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (400, 66, 700, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (401, 66, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (402, 67, 80, 'г', 54);
+INSERT INTO public.recipe_ingredients VALUES (403, 67, 100, 'г', 51);
+INSERT INTO public.recipe_ingredients VALUES (404, 67, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (405, 67, 80, 'мл', 52);
+INSERT INTO public.recipe_ingredients VALUES (406, 67, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (407, 67, 30, 'г', 28);
+INSERT INTO public.recipe_ingredients VALUES (408, 68, 100, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (409, 68, 80, 'г', 29);
+INSERT INTO public.recipe_ingredients VALUES (410, 68, 80, 'г', 30);
+INSERT INTO public.recipe_ingredients VALUES (411, 68, 50, 'г', 110);
+INSERT INTO public.recipe_ingredients VALUES (412, 68, 60, 'г', 20);
+INSERT INTO public.recipe_ingredients VALUES (413, 68, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (420, 70, 100, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (421, 70, 60, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (422, 70, 80, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (423, 70, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (424, 71, 130, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (425, 71, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (465, 78, 100, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (466, 78, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (467, 78, 80, 'г', 32);
+INSERT INTO public.recipe_ingredients VALUES (468, 78, 80, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (469, 78, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (470, 78, 700, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (471, 78, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (472, 79, 80, 'г', 54);
+INSERT INTO public.recipe_ingredients VALUES (473, 79, 40, 'г', 28);
+INSERT INTO public.recipe_ingredients VALUES (474, 79, 50, 'мл', 5);
+INSERT INTO public.recipe_ingredients VALUES (475, 79, 5, 'г', 4);
+INSERT INTO public.recipe_ingredients VALUES (476, 79, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (477, 79, 5, 'г', 56);
+INSERT INTO public.recipe_ingredients VALUES (478, 80, 80, 'г', 41);
+INSERT INTO public.recipe_ingredients VALUES (479, 80, 80, 'г', 29);
+INSERT INTO public.recipe_ingredients VALUES (480, 80, 80, 'г', 30);
+INSERT INTO public.recipe_ingredients VALUES (481, 80, 80, 'г', 88);
+INSERT INTO public.recipe_ingredients VALUES (482, 80, 60, 'г', 20);
+INSERT INTO public.recipe_ingredients VALUES (497, 83, 150, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (498, 83, 100, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (499, 83, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (500, 83, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (501, 83, 700, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (508, 85, 80, 'г', 29);
+INSERT INTO public.recipe_ingredients VALUES (509, 85, 80, 'г', 30);
+INSERT INTO public.recipe_ingredients VALUES (510, 85, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (511, 85, 50, 'г', 28);
+INSERT INTO public.recipe_ingredients VALUES (512, 85, 60, 'г', 20);
+INSERT INTO public.recipe_ingredients VALUES (513, 85, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (514, 86, 130, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (515, 86, 70, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (516, 86, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (23, 5, 50, 'г', 6);
+INSERT INTO public.recipe_ingredients VALUES (24, 5, 80, 'г', 36);
+INSERT INTO public.recipe_ingredients VALUES (25, 5, 200, 'мл', 5);
+INSERT INTO public.recipe_ingredients VALUES (26, 6, 100, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (27, 6, 50, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (28, 6, 40, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (29, 6, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (30, 6, 600, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (31, 7, 150, 'г', 17);
+INSERT INTO public.recipe_ingredients VALUES (32, 7, 80, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (33, 7, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (34, 8, 200, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (35, 8, 100, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (36, 8, 50, 'мл', 5);
+INSERT INTO public.recipe_ingredients VALUES (37, 9, 60, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (38, 9, 40, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (39, 9, 80, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (40, 9, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (41, 9, 700, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (45, 11, 80, 'г', 9);
+INSERT INTO public.recipe_ingredients VALUES (46, 11, 120, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (47, 11, 30, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (48, 12, 100, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (49, 12, 50, 'мл', 5);
+INSERT INTO public.recipe_ingredients VALUES (50, 13, 250, 'г', 7);
+INSERT INTO public.recipe_ingredients VALUES (51, 13, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (52, 13, 50, 'мл', 52);
+INSERT INTO public.recipe_ingredients VALUES (53, 13, 400, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (54, 14, 130, 'г', 21);
+INSERT INTO public.recipe_ingredients VALUES (603, 100, 80, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (604, 100, 120, 'г', 17);
+INSERT INTO public.recipe_ingredients VALUES (605, 100, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (606, 100, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (607, 100, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (608, 100, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (609, 100, 200, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (55, 14, 70, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (56, 14, 40, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (57, 14, 200, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (58, 15, 100, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (59, 15, 50, 'г', 6);
+INSERT INTO public.recipe_ingredients VALUES (60, 15, 40, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (61, 15, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (62, 15, 700, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (63, 16, 200, 'г', 19);
+INSERT INTO public.recipe_ingredients VALUES (64, 16, 50, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (65, 16, 15, 'г', 13);
+INSERT INTO public.recipe_ingredients VALUES (66, 17, 200, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (67, 17, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (68, 17, 50, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (69, 18, 100, 'г', 7);
+INSERT INTO public.recipe_ingredients VALUES (70, 18, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (71, 18, 100, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (72, 18, 80, 'г', 32);
+INSERT INTO public.recipe_ingredients VALUES (73, 18, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (74, 18, 50, 'мл', 89);
+INSERT INTO public.recipe_ingredients VALUES (75, 19, 60, 'г', 42);
+INSERT INTO public.recipe_ingredients VALUES (76, 19, 80, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (77, 19, 40, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (78, 19, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (79, 19, 700, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (80, 20, 150, 'г', 17);
+INSERT INTO public.recipe_ingredients VALUES (81, 20, 80, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (82, 20, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (83, 20, 5, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (84, 20, 100, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (85, 21, 70, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (86, 21, 400, 'мл', 5);
+INSERT INTO public.recipe_ingredients VALUES (87, 21, 10, 'г', 13);
+INSERT INTO public.recipe_ingredients VALUES (88, 22, 80, 'г', 54);
+INSERT INTO public.recipe_ingredients VALUES (89, 22, 100, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (90, 22, 80, 'г', 51);
+INSERT INTO public.recipe_ingredients VALUES (91, 22, 100, 'мл', 52);
+INSERT INTO public.recipe_ingredients VALUES (92, 22, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (93, 22, 10, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (94, 22, 30, 'г', 28);
+INSERT INTO public.recipe_ingredients VALUES (95, 23, 80, 'г', 54);
+INSERT INTO public.recipe_ingredients VALUES (96, 23, 100, 'мл', 89);
+INSERT INTO public.recipe_ingredients VALUES (97, 23, 5, 'г', 90);
+INSERT INTO public.recipe_ingredients VALUES (98, 23, 5, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (99, 23, 20, 'г', 28);
+INSERT INTO public.recipe_ingredients VALUES (100, 24, 70, 'г', 40);
+INSERT INTO public.recipe_ingredients VALUES (101, 24, 120, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (102, 24, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (103, 24, 60, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (104, 24, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (105, 24, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (106, 24, 100, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (107, 25, 150, 'г', 17);
+INSERT INTO public.recipe_ingredients VALUES (108, 25, 180, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (109, 25, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (110, 25, 5, 'мл', 1);
+INSERT INTO public.recipe_ingredients VALUES (112, 26, 100, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (113, 26, 80, 'г', 29);
+INSERT INTO public.recipe_ingredients VALUES (114, 26, 80, 'г', 30);
+INSERT INTO public.recipe_ingredients VALUES (115, 26, 50, 'г', 110);
+INSERT INTO public.recipe_ingredients VALUES (116, 26, 100, 'г', 20);
+INSERT INTO public.recipe_ingredients VALUES (117, 26, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (119, 27, 100, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (120, 27, 40, 'г', 28);
+INSERT INTO public.recipe_ingredients VALUES (121, 27, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (122, 27, 5, 'г', 56);
+INSERT INTO public.recipe_ingredients VALUES (123, 27, 30, 'мл', 5);
+INSERT INTO public.recipe_ingredients VALUES (124, 27, 5, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (125, 28, 80, 'г', 9);
+INSERT INTO public.recipe_ingredients VALUES (126, 28, 100, 'г', 51);
+INSERT INTO public.recipe_ingredients VALUES (127, 28, 50, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (128, 28, 10, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (129, 28, 200, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (130, 29, 200, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (131, 29, 80, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (132, 29, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (133, 29, 50, 'мл', 52);
+INSERT INTO public.recipe_ingredients VALUES (134, 29, 500, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (135, 30, 130, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (136, 30, 100, 'мл', 52);
+INSERT INTO public.recipe_ingredients VALUES (111, 25, 1, 'шт', 12);
+INSERT INTO public.recipe_ingredients VALUES (118, 26, 10, 'мл', 12);
+INSERT INTO public.recipe_ingredients VALUES (202, 31, 10, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (203, 31, 15, 'мл', 66);
+INSERT INTO public.recipe_ingredients VALUES (205, 32, 60, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (206, 32, 50, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (207, 32, 40, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (208, 32, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (209, 32, 12, 'мл', 66);
+INSERT INTO public.recipe_ingredients VALUES (210, 33, 150, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (211, 33, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (212, 33, 30, 'мл', 73);
+INSERT INTO public.recipe_ingredients VALUES (213, 34, 60, 'г', 72);
+INSERT INTO public.recipe_ingredients VALUES (214, 34, 80, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (215, 34, 30, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (216, 34, 30, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (217, 34, 400, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (218, 35, 120, 'г', 77);
+INSERT INTO public.recipe_ingredients VALUES (219, 35, 70, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (220, 35, 50, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (221, 35, 10, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (222, 35, 10, 'мл', 66);
+INSERT INTO public.recipe_ingredients VALUES (223, 36, 80, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (224, 36, 100, 'г', 84);
+INSERT INTO public.recipe_ingredients VALUES (225, 36, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (226, 36, 5, 'мл', 66);
+INSERT INTO public.recipe_ingredients VALUES (227, 37, 130, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (228, 37, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (229, 37, 10, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (230, 37, 25, 'г', 131);
+INSERT INTO public.recipe_ingredients VALUES (231, 37, 100, 'мл', 71);
+INSERT INTO public.recipe_ingredients VALUES (232, 38, 80, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (233, 38, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (234, 38, 40, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (235, 38, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (236, 38, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (237, 38, 15, 'мл', 66);
+INSERT INTO public.recipe_ingredients VALUES (238, 39, 70, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (239, 39, 100, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (240, 39, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (241, 39, 8, 'мл', 66);
+INSERT INTO public.recipe_ingredients VALUES (242, 39, 20, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (243, 40, 80, 'г', 54);
+INSERT INTO public.recipe_ingredients VALUES (244, 40, 120, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (245, 40, 10, 'г', 74);
+INSERT INTO public.recipe_ingredients VALUES (246, 40, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (247, 40, 10, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (248, 40, 15, 'мл', 66);
+INSERT INTO public.recipe_ingredients VALUES (249, 41, 100, 'г', 24);
+INSERT INTO public.recipe_ingredients VALUES (250, 41, 80, 'г', 29);
+INSERT INTO public.recipe_ingredients VALUES (251, 41, 80, 'г', 30);
+INSERT INTO public.recipe_ingredients VALUES (252, 41, 50, 'г', 110);
+INSERT INTO public.recipe_ingredients VALUES (253, 41, 60, 'г', 20);
+INSERT INTO public.recipe_ingredients VALUES (255, 41, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (262, 43, 80, 'г', 40);
+INSERT INTO public.recipe_ingredients VALUES (263, 43, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (264, 43, 60, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (265, 43, 40, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (266, 43, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (267, 43, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (268, 43, 100, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (274, 45, 70, 'г', 43);
+INSERT INTO public.recipe_ingredients VALUES (275, 45, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (276, 45, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (277, 45, 80, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (278, 45, 700, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (279, 46, 70, 'г', 41);
+INSERT INTO public.recipe_ingredients VALUES (280, 46, 120, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (281, 46, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (282, 46, 60, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (283, 46, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (284, 46, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (285, 46, 150, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (286, 47, 100, 'г', 88);
+INSERT INTO public.recipe_ingredients VALUES (287, 47, 80, 'г', 29);
+INSERT INTO public.recipe_ingredients VALUES (288, 47, 80, 'г', 30);
+INSERT INTO public.recipe_ingredients VALUES (289, 47, 50, 'г', 110);
+INSERT INTO public.recipe_ingredients VALUES (290, 47, 60, 'г', 20);
+INSERT INTO public.recipe_ingredients VALUES (292, 48, 150, 'г', 17);
+INSERT INTO public.recipe_ingredients VALUES (293, 48, 80, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (294, 48, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (295, 48, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (296, 48, 8, 'мл', 1);
+INSERT INTO public.recipe_ingredients VALUES (298, 49, 80, 'г', 54);
+INSERT INTO public.recipe_ingredients VALUES (299, 49, 50, 'г', 28);
+INSERT INTO public.recipe_ingredients VALUES (300, 49, 30, 'мл', 5);
+INSERT INTO public.recipe_ingredients VALUES (301, 49, 5, 'г', 4);
+INSERT INTO public.recipe_ingredients VALUES (302, 50, 120, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (303, 50, 100, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (304, 50, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (305, 50, 80, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (306, 50, 80, 'г', 32);
+INSERT INTO public.recipe_ingredients VALUES (307, 50, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (308, 50, 50, 'мл', 89);
+INSERT INTO public.recipe_ingredients VALUES (309, 50, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (310, 50, 200, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (311, 51, 80, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (312, 51, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (313, 51, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (314, 51, 50, 'г', 64);
+INSERT INTO public.recipe_ingredients VALUES (315, 51, 5, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (316, 51, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (317, 52, 130, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (318, 52, 120, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (319, 52, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (320, 52, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (321, 52, 100, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (322, 53, 100, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (323, 53, 80, 'г', 51);
+INSERT INTO public.recipe_ingredients VALUES (324, 53, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (325, 53, 30, 'мл', 5);
+INSERT INTO public.recipe_ingredients VALUES (326, 53, 10, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (327, 54, 150, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (328, 54, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (254, 41, 5, 'мл', 12);
+INSERT INTO public.recipe_ingredients VALUES (291, 47, 10, 'мл', 12);
+INSERT INTO public.recipe_ingredients VALUES (297, 48, 10, 'мл', 12);
+INSERT INTO public.recipe_ingredients VALUES (426, 71, 80, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (427, 71, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (428, 71, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (429, 71, 150, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (436, 73, 80, 'г', 54);
+INSERT INTO public.recipe_ingredients VALUES (437, 73, 100, 'мл', 89);
+INSERT INTO public.recipe_ingredients VALUES (438, 73, 5, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (439, 73, 5, 'г', 90);
+INSERT INTO public.recipe_ingredients VALUES (440, 73, 20, 'г', 28);
+INSERT INTO public.recipe_ingredients VALUES (441, 74, 100, 'г', 17);
+INSERT INTO public.recipe_ingredients VALUES (442, 74, 80, 'г', 29);
+INSERT INTO public.recipe_ingredients VALUES (443, 74, 80, 'г', 30);
+INSERT INTO public.recipe_ingredients VALUES (444, 74, 50, 'г', 110);
+INSERT INTO public.recipe_ingredients VALUES (445, 74, 60, 'г', 20);
+INSERT INTO public.recipe_ingredients VALUES (446, 74, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (453, 76, 80, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (454, 76, 100, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (455, 76, 60, 'г', 64);
+INSERT INTO public.recipe_ingredients VALUES (456, 76, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (457, 76, 10, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (458, 76, 10, 'мл', 66);
+INSERT INTO public.recipe_ingredients VALUES (459, 77, 180, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (460, 77, 150, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (461, 77, 60, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (462, 77, 50, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (463, 77, 10, 'мл', 1);
+INSERT INTO public.recipe_ingredients VALUES (464, 77, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (517, 86, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (518, 86, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (519, 86, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (520, 86, 200, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (521, 87, 120, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (522, 87, 100, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (523, 87, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (524, 87, 80, 'г', 32);
+INSERT INTO public.recipe_ingredients VALUES (525, 87, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (526, 87, 800, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (527, 88, 80, 'г', 54);
+INSERT INTO public.recipe_ingredients VALUES (528, 88, 100, 'г', 51);
+INSERT INTO public.recipe_ingredients VALUES (529, 88, 100, 'мл', 52);
+INSERT INTO public.recipe_ingredients VALUES (530, 88, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (531, 88, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (532, 88, 30, 'г', 28);
+INSERT INTO public.recipe_ingredients VALUES (533, 89, 100, 'г', 24);
+INSERT INTO public.recipe_ingredients VALUES (534, 89, 100, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (535, 89, 80, 'г', 29);
+INSERT INTO public.recipe_ingredients VALUES (536, 89, 80, 'г', 30);
+INSERT INTO public.recipe_ingredients VALUES (537, 89, 60, 'г', 20);
+INSERT INTO public.recipe_ingredients VALUES (538, 89, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (539, 90, 80, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (540, 90, 120, 'г', 17);
+INSERT INTO public.recipe_ingredients VALUES (541, 90, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (542, 90, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (543, 90, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (544, 90, 200, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (545, 91, 70, 'г', 40);
+INSERT INTO public.recipe_ingredients VALUES (546, 91, 130, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (547, 91, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (548, 91, 60, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (549, 91, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (550, 91, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (551, 91, 150, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (552, 92, 70, 'г', 43);
+INSERT INTO public.recipe_ingredients VALUES (553, 92, 50, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (554, 92, 40, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (555, 92, 100, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (556, 92, 700, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (557, 92, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (558, 93, 80, 'г', 54);
+INSERT INTO public.recipe_ingredients VALUES (559, 93, 60, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (560, 93, 60, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (561, 93, 30, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (562, 93, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (563, 93, 40, 'г', 28);
+INSERT INTO public.recipe_ingredients VALUES (564, 93, 80, 'мл', 52);
+INSERT INTO public.recipe_ingredients VALUES (565, 94, 100, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (566, 94, 80, 'г', 88);
+INSERT INTO public.recipe_ingredients VALUES (567, 94, 80, 'г', 29);
+INSERT INTO public.recipe_ingredients VALUES (568, 94, 80, 'г', 30);
+INSERT INTO public.recipe_ingredients VALUES (569, 94, 50, 'г', 110);
+INSERT INTO public.recipe_ingredients VALUES (570, 94, 60, 'г', 20);
+INSERT INTO public.recipe_ingredients VALUES (579, 96, 130, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (580, 96, 100, 'г', 51);
+INSERT INTO public.recipe_ingredients VALUES (581, 96, 50, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (582, 96, 80, 'мл', 52);
+INSERT INTO public.recipe_ingredients VALUES (583, 96, 8, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (584, 96, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (592, 98, 80, 'г', 54);
+INSERT INTO public.recipe_ingredients VALUES (593, 98, 100, 'мл', 89);
+INSERT INTO public.recipe_ingredients VALUES (594, 98, 5, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (595, 98, 5, 'г', 90);
+INSERT INTO public.recipe_ingredients VALUES (596, 98, 20, 'г', 28);
+INSERT INTO public.recipe_ingredients VALUES (483, 80, 10, 'мл', 12);
+INSERT INTO public.recipe_ingredients VALUES (571, 94, 10, 'мл', 12);
+INSERT INTO public.recipe_ingredients VALUES (610, 72, 200, 'г', 115);
+INSERT INTO public.recipe_ingredients VALUES (611, 72, 150, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (612, 72, 60, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (613, 72, 50, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (614, 72, 800, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (615, 72, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (616, 97, 300, 'г', 133);
+INSERT INTO public.recipe_ingredients VALUES (617, 97, 150, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (618, 97, 600, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (619, 97, 100, 'мл', 52);
+INSERT INTO public.recipe_ingredients VALUES (620, 57, 100, 'г', 42);
+INSERT INTO public.recipe_ingredients VALUES (621, 57, 200, 'г', 15);
+INSERT INTO public.recipe_ingredients VALUES (622, 57, 60, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (623, 57, 60, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (624, 57, 10, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (625, 57, 400, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (626, 69, 80, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (627, 69, 80, 'г', 84);
+INSERT INTO public.recipe_ingredients VALUES (628, 69, 80, 'г', 85);
+INSERT INTO public.recipe_ingredients VALUES (629, 69, 80, 'г', 129);
+INSERT INTO public.recipe_ingredients VALUES (630, 69, 10, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (631, 69, 15, 'мл', 66);
+INSERT INTO public.recipe_ingredients VALUES (632, 95, 100, 'г', 14);
+INSERT INTO public.recipe_ingredients VALUES (633, 95, 150, 'г', 78);
+INSERT INTO public.recipe_ingredients VALUES (634, 95, 80, 'г', 33);
+INSERT INTO public.recipe_ingredients VALUES (635, 95, 50, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (636, 95, 10, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (637, 95, 50, 'мл', 89);
+INSERT INTO public.recipe_ingredients VALUES (638, 44, 50, 'г', 58);
+INSERT INTO public.recipe_ingredients VALUES (639, 44, 100, 'г', 88);
+INSERT INTO public.recipe_ingredients VALUES (640, 44, 50, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (642, 65, 40, 'г', 6);
+INSERT INTO public.recipe_ingredients VALUES (643, 65, 120, 'г', 20);
+INSERT INTO public.recipe_ingredients VALUES (644, 65, 80, 'г', 39);
+INSERT INTO public.recipe_ingredients VALUES (650, 60, 80, 'г', 54);
+INSERT INTO public.recipe_ingredients VALUES (651, 60, 120, 'г', 84);
+INSERT INTO public.recipe_ingredients VALUES (652, 60, 10, 'мл', 1);
+INSERT INTO public.recipe_ingredients VALUES (653, 60, 10, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (654, 60, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (655, 84, 80, 'г', 54);
+INSERT INTO public.recipe_ingredients VALUES (656, 84, 100, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (657, 84, 10, 'мл', 1);
+INSERT INTO public.recipe_ingredients VALUES (658, 84, 20, 'г', 57);
+INSERT INTO public.recipe_ingredients VALUES (659, 58, 100, 'г', 79);
+INSERT INTO public.recipe_ingredients VALUES (660, 58, 200, 'г', 34);
+INSERT INTO public.recipe_ingredients VALUES (661, 58, 400, 'мл', 5);
+INSERT INTO public.recipe_ingredients VALUES (662, 58, 15, 'г', 60);
+INSERT INTO public.recipe_ingredients VALUES (663, 75, 100, 'г', 41);
+INSERT INTO public.recipe_ingredients VALUES (664, 75, 50, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (665, 75, 60, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (666, 75, 80, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (667, 75, 10, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (668, 56, 120, 'г', 84);
+INSERT INTO public.recipe_ingredients VALUES (669, 56, 100, 'г', 123);
+INSERT INTO public.recipe_ingredients VALUES (670, 56, 80, 'г', 88);
+INSERT INTO public.recipe_ingredients VALUES (671, 56, 50, 'г', 110);
+INSERT INTO public.recipe_ingredients VALUES (672, 56, 60, 'г', 20);
+INSERT INTO public.recipe_ingredients VALUES (673, 56, 10, 'мл', 75);
+INSERT INTO public.recipe_ingredients VALUES (674, 61, 100, 'г', 29);
+INSERT INTO public.recipe_ingredients VALUES (675, 61, 100, 'г', 30);
+INSERT INTO public.recipe_ingredients VALUES (676, 61, 80, 'г', 112);
+INSERT INTO public.recipe_ingredients VALUES (677, 61, 50, 'г', 144);
+INSERT INTO public.recipe_ingredients VALUES (678, 61, 15, 'мл', 1);
+INSERT INTO public.recipe_ingredients VALUES (679, 61, 2, 'г', 91);
+INSERT INTO public.recipe_ingredients VALUES (680, 99, 60, 'г', 87);
+INSERT INTO public.recipe_ingredients VALUES (681, 99, 100, 'г', 37);
+INSERT INTO public.recipe_ingredients VALUES (682, 99, 30, 'г', 57);
+INSERT INTO public.recipe_ingredients VALUES (683, 99, 20, 'г', 44);
+INSERT INTO public.recipe_ingredients VALUES (684, 99, 10, 'мл', 1);
+INSERT INTO public.recipe_ingredients VALUES (685, 10, 300, 'г', 17);
+INSERT INTO public.recipe_ingredients VALUES (686, 10, 50, 'г', 11);
+INSERT INTO public.recipe_ingredients VALUES (687, 10, 10, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (688, 82, 250, 'г', 17);
+INSERT INTO public.recipe_ingredients VALUES (689, 82, 150, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (690, 82, 100, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (691, 82, 50, 'мл', 89);
+INSERT INTO public.recipe_ingredients VALUES (692, 82, 15, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (693, 62, 200, 'г', 17);
+INSERT INTO public.recipe_ingredients VALUES (694, 62, 150, 'г', 8);
+INSERT INTO public.recipe_ingredients VALUES (695, 62, 50, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (696, 62, 80, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (697, 62, 700, 'мл', 69);
+INSERT INTO public.recipe_ingredients VALUES (698, 42, 300, 'г', 115);
+INSERT INTO public.recipe_ingredients VALUES (699, 42, 150, 'г', 86);
+INSERT INTO public.recipe_ingredients VALUES (700, 42, 100, 'г', 16);
+INSERT INTO public.recipe_ingredients VALUES (701, 42, 10, 'мл', 1);
+INSERT INTO public.recipe_ingredients VALUES (702, 81, 400, 'г', 98);
+INSERT INTO public.recipe_ingredients VALUES (703, 81, 150, 'г', 3);
+INSERT INTO public.recipe_ingredients VALUES (704, 81, 15, 'мл', 68);
+INSERT INTO public.recipe_ingredients VALUES (705, 81, 5, 'г', 55);
+INSERT INTO public.recipe_ingredients VALUES (641, 44, 5, 'мл', 12);
 
 
 --
@@ -2529,19 +2169,13 @@ INSERT INTO public.recipes VALUES (81, 'Куриные бёдра тушёные
 
 
 --
--- Data for Name: user_excluded_products; Type: TABLE DATA; Schema: public; Owner: postgres
+-- Data for Name: user_product_preferences; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-INSERT INTO public.user_excluded_products VALUES (1, 10);
-
-
---
--- Data for Name: user_favorite_products; Type: TABLE DATA; Schema: public; Owner: postgres
---
-
-INSERT INTO public.user_favorite_products VALUES (1, 15);
-INSERT INTO public.user_favorite_products VALUES (1, 11);
-INSERT INTO public.user_favorite_products VALUES (1, 18);
+INSERT INTO public.user_product_preferences VALUES (1, 10, 'excluded', '2026-04-16 20:04:15.688169');
+INSERT INTO public.user_product_preferences VALUES (1, 15, 'favorite', '2026-04-16 20:04:15.688169');
+INSERT INTO public.user_product_preferences VALUES (1, 11, 'favorite', '2026-04-16 20:04:15.688169');
+INSERT INTO public.user_product_preferences VALUES (1, 18, 'favorite', '2026-04-16 20:04:15.688169');
 
 
 --
@@ -2570,13 +2204,6 @@ SELECT pg_catalog.setval('public.diet_cooking_method_restrictions_id_seq', 10, t
 --
 
 SELECT pg_catalog.setval('public.diets_id_seq', 5, true);
-
-
---
--- Name: ingredients_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
---
-
-SELECT pg_catalog.setval('public.ingredients_id_seq', 150, true);
 
 
 --
@@ -2624,22 +2251,6 @@ ALTER TABLE ONLY public.diet_cooking_method_restrictions
 
 
 --
--- Name: diet_hard_cooking_bans diet_hard_cooking_bans_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.diet_hard_cooking_bans
-    ADD CONSTRAINT diet_hard_cooking_bans_pkey PRIMARY KEY (diet_id, cooking_method);
-
-
---
--- Name: diet_hard_product_bans diet_hard_product_bans_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.diet_hard_product_bans
-    ADD CONSTRAINT diet_hard_product_bans_pkey PRIMARY KEY (diet_id, product_id);
-
-
---
 -- Name: diet_product_rules diet_product_rules_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2653,14 +2264,6 @@ ALTER TABLE ONLY public.diet_product_rules
 
 ALTER TABLE ONLY public.diets
     ADD CONSTRAINT diets_pkey PRIMARY KEY (id);
-
-
---
--- Name: ingredients ingredients_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.ingredients
-    ADD CONSTRAINT ingredients_pkey PRIMARY KEY (id);
 
 
 --
@@ -2696,11 +2299,11 @@ ALTER TABLE ONLY public.recipe_ingredients
 
 
 --
--- Name: recipe_ingredients recipe_ingredients_recipe_id_ingredient_id_uk; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: recipe_ingredients recipe_ingredients_recipe_id_product_id_uk; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.recipe_ingredients
-    ADD CONSTRAINT recipe_ingredients_recipe_id_ingredient_id_uk UNIQUE (recipe_id, ingredient_id);
+    ADD CONSTRAINT recipe_ingredients_recipe_id_product_id_uk UNIQUE (recipe_id, product_id);
 
 
 --
@@ -2720,19 +2323,11 @@ ALTER TABLE ONLY public.recipes
 
 
 --
--- Name: user_excluded_products user_excluded_products_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: user_product_preferences user_product_preferences_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.user_excluded_products
-    ADD CONSTRAINT user_excluded_products_pkey PRIMARY KEY (user_id, product_id);
-
-
---
--- Name: user_favorite_products user_favorite_products_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.user_favorite_products
-    ADD CONSTRAINT user_favorite_products_pkey PRIMARY KEY (user_id, product_id);
+ALTER TABLE ONLY public.user_product_preferences
+    ADD CONSTRAINT user_product_preferences_pkey PRIMARY KEY (user_id, product_id, preference_type);
 
 
 --
@@ -2760,17 +2355,10 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: idx_diet_hard_cooking_bans_diet_method; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_diet_cooking_restrictions_lookup; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX idx_diet_hard_cooking_bans_diet_method ON public.diet_hard_cooking_bans USING btree (diet_id, cooking_method);
-
-
---
--- Name: idx_diet_hard_product_bans_diet_product; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX idx_diet_hard_product_bans_diet_product ON public.diet_hard_product_bans USING btree (diet_id, product_id);
+CREATE INDEX idx_diet_cooking_restrictions_lookup ON public.diet_cooking_method_restrictions USING btree (diet_id, cooking_method, status, is_hard);
 
 
 --
@@ -2781,17 +2369,24 @@ CREATE INDEX idx_diet_product_rules_diet_status_product ON public.diet_product_r
 
 
 --
--- Name: idx_ingredients_product; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_diet_product_rules_lookup; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX idx_ingredients_product ON public.ingredients USING btree (product_id);
+CREATE INDEX idx_diet_product_rules_lookup ON public.diet_product_rules USING btree (diet_id, status, is_hard, product_id);
 
 
 --
--- Name: idx_ingredients_product_id; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_products_flags; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX idx_ingredients_product_id ON public.ingredients USING btree (product_id);
+CREATE INDEX idx_products_flags ON public.products USING btree (is_spicy, is_acidic, is_saturated_fat) WHERE (is_spicy OR is_acidic OR is_saturated_fat);
+
+
+--
+-- Name: idx_recipe_diets_diet_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_recipe_diets_diet_id ON public.recipe_diets USING btree (diet_id);
 
 
 --
@@ -2802,17 +2397,10 @@ CREATE INDEX idx_recipe_diets_diet_id_recipe_id ON public.recipe_diets USING btr
 
 
 --
--- Name: idx_recipe_ingredients_ing; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_recipe_ingredients_product_id; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX idx_recipe_ingredients_ing ON public.recipe_ingredients USING btree (ingredient_id);
-
-
---
--- Name: idx_recipe_ingredients_ingredient_id; Type: INDEX; Schema: public; Owner: postgres
---
-
-CREATE INDEX idx_recipe_ingredients_ingredient_id ON public.recipe_ingredients USING btree (ingredient_id);
+CREATE INDEX idx_recipe_ingredients_product_id ON public.recipe_ingredients USING btree (product_id);
 
 
 --
@@ -2830,17 +2418,17 @@ CREATE INDEX idx_recipe_ingredients_recipe_id ON public.recipe_ingredients USING
 
 
 --
--- Name: idx_user_excluded_products; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_recipes_cooking_method; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX idx_user_excluded_products ON public.user_excluded_products USING btree (user_id, product_id);
+CREATE INDEX idx_recipes_cooking_method ON public.recipes USING btree (cooking_method);
 
 
 --
--- Name: idx_user_favorite_products; Type: INDEX; Schema: public; Owner: postgres
+-- Name: idx_user_product_preferences_user_type; Type: INDEX; Schema: public; Owner: postgres
 --
 
-CREATE INDEX idx_user_favorite_products ON public.user_favorite_products USING btree (user_id, product_id);
+CREATE INDEX idx_user_product_preferences_user_type ON public.user_product_preferences USING btree (user_id, preference_type, product_id);
 
 
 --
@@ -2849,30 +2437,6 @@ CREATE INDEX idx_user_favorite_products ON public.user_favorite_products USING b
 
 ALTER TABLE ONLY public.diet_cooking_method_restrictions
     ADD CONSTRAINT diet_cooking_method_restrictions_diet_id_fkey FOREIGN KEY (diet_id) REFERENCES public.diets(id) ON DELETE CASCADE;
-
-
---
--- Name: diet_hard_cooking_bans diet_hard_cooking_bans_diet_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.diet_hard_cooking_bans
-    ADD CONSTRAINT diet_hard_cooking_bans_diet_id_fkey FOREIGN KEY (diet_id) REFERENCES public.diets(id) ON DELETE CASCADE;
-
-
---
--- Name: diet_hard_product_bans diet_hard_product_bans_diet_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.diet_hard_product_bans
-    ADD CONSTRAINT diet_hard_product_bans_diet_id_fkey FOREIGN KEY (diet_id) REFERENCES public.diets(id) ON DELETE CASCADE;
-
-
---
--- Name: diet_hard_product_bans diet_hard_product_bans_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.diet_hard_product_bans
-    ADD CONSTRAINT diet_hard_product_bans_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE CASCADE;
 
 
 --
@@ -2892,14 +2456,6 @@ ALTER TABLE ONLY public.diet_product_rules
 
 
 --
--- Name: ingredients ingredients_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.ingredients
-    ADD CONSTRAINT ingredients_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE RESTRICT;
-
-
---
 -- Name: recipe_diets recipe_diets_diet_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -2916,11 +2472,11 @@ ALTER TABLE ONLY public.recipe_diets
 
 
 --
--- Name: recipe_ingredients recipe_ingredients_ingredient_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: recipe_ingredients recipe_ingredients_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.recipe_ingredients
-    ADD CONSTRAINT recipe_ingredients_ingredient_id_fkey FOREIGN KEY (ingredient_id) REFERENCES public.ingredients(id);
+    ADD CONSTRAINT recipe_ingredients_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE RESTRICT;
 
 
 --
@@ -2940,35 +2496,19 @@ ALTER TABLE ONLY public.recipe_nutrients_per_100g
 
 
 --
--- Name: user_excluded_products user_excluded_products_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: user_product_preferences user_product_preferences_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.user_excluded_products
-    ADD CONSTRAINT user_excluded_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE CASCADE;
-
-
---
--- Name: user_excluded_products user_excluded_products_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.user_excluded_products
-    ADD CONSTRAINT user_excluded_products_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.user_product_preferences
+    ADD CONSTRAINT user_product_preferences_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE CASCADE;
 
 
 --
--- Name: user_favorite_products user_favorite_products_product_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+-- Name: user_product_preferences user_product_preferences_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.user_favorite_products
-    ADD CONSTRAINT user_favorite_products_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id) ON DELETE CASCADE;
-
-
---
--- Name: user_favorite_products user_favorite_products_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.user_favorite_products
-    ADD CONSTRAINT user_favorite_products_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.user_product_preferences
+    ADD CONSTRAINT user_product_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 
 --
@@ -2991,5 +2531,5 @@ ALTER TABLE ONLY public.users
 -- PostgreSQL database dump complete
 --
 
-\unrestrict E5vHl28Nft1cIohvbH7EHpgSDooh66oY0ytcAgwNgOvnZKvacc6R2eleeotBGjy
+\unrestrict hqKrfk5gBalpmH1LtOyG7osBa5iGJwCS89hDm1dAr1ScqSrTQ8FQ6tf9JpZHlco
 

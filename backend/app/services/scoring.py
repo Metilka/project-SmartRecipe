@@ -2,10 +2,11 @@ from app.models import (
     Diet,
     DietCookingMethodRestriction,
     DietProductRule,
-    Ingredient,
+    Product,
     RecipeIngredient,
     RecipeNutrientsPer100g,
     User,
+    UserProductPreference,
 )
 
 
@@ -44,9 +45,9 @@ def build_effective_targets(user, diet):
     targets = {}
 
     if diet and diet.max_calories is not None:
-        targets["kcal"] = diet.max_calories
+        targets["kcal"] = diet.max_calories / (reference_mass / 100.0)
     if diet and diet.max_salt_mg is not None:
-        targets["sodium_mg"] = diet.max_salt_mg
+        targets["sodium_mg"] = diet.max_salt_mg / (reference_mass / 100.0)
     if diet and diet.max_fat_percent is not None:
         targets["fat"] = diet.max_fat_percent
     if diet and diet.max_carbs_percent is not None:
@@ -86,24 +87,25 @@ def build_effective_targets(user, diet):
 
 
 def calculate_ingredient_score(recipe_id, diet_id):
-    ingredients = (
-        RecipeIngredient.query.join(Ingredient)
+    recipe_products = (
+        RecipeIngredient.query.join(Product, Product.id == RecipeIngredient.product_id)
         .filter(RecipeIngredient.recipe_id == recipe_id)
         .all()
     )
 
-    if not ingredients:
+    if not recipe_products:
         return 0.0
+
+    rules = {
+        row.product_id: row
+        for row in DietProductRule.query.filter_by(diet_id=diet_id).all()
+    }
 
     weighted_score = 0.0
     total_weight = 0.0
 
-    for ri in ingredients:
-        product_id = ri.ingredient.product_id
-        rule = DietProductRule.query.filter_by(
-            diet_id=diet_id,
-            product_id=product_id,
-        ).first()
+    for ri in recipe_products:
+        rule = rules.get(ri.product_id)
 
         if not rule:
             coeff = 0.7
@@ -165,6 +167,7 @@ def calculate_cooking_method_score(recipe, diet_id):
     rule = DietCookingMethodRestriction.query.filter_by(
         diet_id=diet_id,
         cooking_method=recipe.cooking_method,
+        is_hard=False,
     ).first()
 
     if not rule:
@@ -180,27 +183,20 @@ def calculate_cooking_method_score(recipe, diet_id):
 
 
 def calculate_personal_score(user_id, recipe):
-    user = User.query.get(user_id)
-    if not user:
-        return 0.5
+    favorite_product_ids = {
+        row.product_id
+        for row in UserProductPreference.query.filter_by(
+            user_id=user_id,
+            preference_type="favorite",
+        ).all()
+    }
 
-    favorite_product_ids = {item.product_id for item in user.favorite_products}
     if not favorite_product_ids:
         return 0.5
 
-    ingredients = (
-        RecipeIngredient.query.join(Ingredient)
-        .filter(RecipeIngredient.recipe_id == recipe.id)
-        .all()
-    )
-
-    if not ingredients:
-        return 0.5
-
     recipe_product_ids = {
-        ri.ingredient.product_id
-        for ri in ingredients
-        if ri.ingredient and ri.ingredient.product_id
+        row.product_id
+        for row in RecipeIngredient.query.filter_by(recipe_id=recipe.id).all()
     }
 
     if not recipe_product_ids:

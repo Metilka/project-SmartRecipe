@@ -31,13 +31,8 @@ class User(db.Model):
         uselist=False,
         cascade="all, delete-orphan",
     )
-    excluded_products = db.relationship(
-        "UserExcludedProduct",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-    )
-    favorite_products = db.relationship(
-        "UserFavoriteProduct",
+    product_preferences = db.relationship(
+        "UserProductPreference",
         cascade="all, delete-orphan",
         lazy="selectin",
     )
@@ -71,25 +66,15 @@ class Product(db.Model):
     name = db.Column(db.String(150), unique=True, nullable=False)
     category = db.Column(db.String(100))
 
-
-class Ingredient(db.Model):
-    __tablename__ = "ingredients"
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(150), nullable=False)
-    category = db.Column(db.String(100))
     calories_per_100g = db.Column(db.Float)
     protein_per_100g = db.Column(db.Float)
     fat_per_100g = db.Column(db.Float)
     carbs_per_100g = db.Column(db.Float)
     salt_mg_per_100g = db.Column(db.Float)
     glycemic_index = db.Column(db.Float)
-    is_spicy = db.Column(db.Boolean, default=False)
-    is_acidic = db.Column(db.Boolean, default=False)
-    is_saturated_fat = db.Column(db.Boolean, default=False)
-    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False)
-
-    product = db.relationship("Product")
+    is_spicy = db.Column(db.Boolean, nullable=False, default=False)
+    is_acidic = db.Column(db.Boolean, nullable=False, default=False)
+    is_saturated_fat = db.Column(db.Boolean, nullable=False, default=False)
 
 
 class Recipe(db.Model):
@@ -115,18 +100,18 @@ class RecipeIngredient(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     recipe_id = db.Column(db.Integer, db.ForeignKey("recipes.id"), nullable=False)
-    ingredient_id = db.Column(db.Integer, db.ForeignKey("ingredients.id"), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False)
     quantity = db.Column(db.Float, nullable=False)
     unit = db.Column(db.String(50))
 
     recipe = db.relationship("Recipe")
-    ingredient = db.relationship("Ingredient")
+    product = db.relationship("Product")
 
     __table_args__ = (
         db.UniqueConstraint(
             "recipe_id",
-            "ingredient_id",
-            name="recipe_ingredients_recipe_id_ingredient_id_uk",
+            "product_id",
+            name="recipe_ingredients_recipe_id_product_id_uk",
         ),
     )
 
@@ -152,18 +137,20 @@ class RecipeNutrientsPer100g(db.Model):
     recipe = db.relationship("Recipe", back_populates="nutrients")
 
 
-class UserExcludedProduct(db.Model):
-    __tablename__ = "user_excluded_products"
+class UserProductPreference(db.Model):
+    __tablename__ = "user_product_preferences"
 
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True)
     product_id = db.Column(db.Integer, db.ForeignKey("products.id"), primary_key=True)
+    preference_type = db.Column(db.String(20), primary_key=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-
-class UserFavoriteProduct(db.Model):
-    __tablename__ = "user_favorite_products"
-
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True)
-    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), primary_key=True)
+    __table_args__ = (
+        db.CheckConstraint(
+            "preference_type IN ('excluded', 'favorite')",
+            name="user_product_preferences_preference_type_check",
+        ),
+    )
 
 
 class DietProductRule(db.Model):
@@ -172,6 +159,8 @@ class DietProductRule(db.Model):
     diet_id = db.Column(db.Integer, db.ForeignKey("diets.id"), primary_key=True)
     product_id = db.Column(db.Integer, db.ForeignKey("products.id"), primary_key=True)
     status = db.Column(db.String(20), nullable=False)
+    is_hard = db.Column(db.Boolean, nullable=False, default=False)
+    reason = db.Column(db.Text)
 
 
 class DietCookingMethodRestriction(db.Model):
@@ -181,19 +170,5 @@ class DietCookingMethodRestriction(db.Model):
     diet_id = db.Column(db.Integer, db.ForeignKey("diets.id"))
     cooking_method = db.Column(db.String(50))
     status = db.Column(db.String(20), nullable=False)
-
-
-class DietHardProductBan(db.Model):
-    __tablename__ = "diet_hard_product_bans"
-
-    diet_id = db.Column(db.Integer, db.ForeignKey("diets.id"), primary_key=True)
-    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), primary_key=True)
-    reason = db.Column(db.Text)
-
-
-class DietHardCookingBan(db.Model):
-    __tablename__ = "diet_hard_cooking_bans"
-
-    diet_id = db.Column(db.Integer, db.ForeignKey("diets.id"), primary_key=True)
-    cooking_method = db.Column(db.String(50), primary_key=True)
+    is_hard = db.Column(db.Boolean, nullable=False, default=False)
     reason = db.Column(db.Text)
