@@ -1,5 +1,7 @@
+from sqlalchemy import func, or_
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models import (
@@ -8,15 +10,16 @@ from app.models import (
     Recipe,
     RecipeDiet,
     RecipeIngredient,
-    RecipeNutrientsPer100g,
     User,
     UserProductPreference,
     UserProfile,
 )
 from app.services.recommendations import (
     get_allowed_product_ids_for_diet,
+    get_personalized_recipe_for_user,
     get_recommendations_for_user,
 )
+from app.services.scoring import SUPPORTED_PREFERENCE_TAGS
 
 main = Blueprint("main", __name__)
 
@@ -29,13 +32,17 @@ def get_authenticated_user():
 def get_user_preference_ids(user, preference_type: str):
     if not user:
         return []
-    return sorted(
-        [
-            item.product_id
-            for item in user.product_preferences
-            if item.preference_type == preference_type
-        ]
+
+    rows = (
+        db.session.query(UserProductPreference.product_id)
+        .filter(
+            UserProductPreference.user_id == user.id,
+            UserProductPreference.preference_type == preference_type,
+        )
+        .order_by(UserProductPreference.product_id.asc())
+        .all()
     )
+    return [row[0] for row in rows]
 
 
 def serialize_profile(profile):
@@ -53,7 +60,7 @@ def serialize_profile(profile):
             "target_carbs": None,
             "target_sugar": None,
             "target_sodium_mg": None,
-            "reference_mass_g_per_day": 2000,
+            "preference_tags": [],
         }
 
     return {
@@ -69,7 +76,18 @@ def serialize_profile(profile):
         "target_carbs": profile.target_carbs,
         "target_sugar": profile.target_sugar,
         "target_sodium_mg": profile.target_sodium_mg,
-        "reference_mass_g_per_day": profile.reference_mass_g_per_day,
+        "preference_tags": list(profile.preference_tags or []),
+    }
+
+
+def _serialize_nutrients(recipe):
+    return {
+        "kcal": recipe.kcal,
+        "protein": recipe.protein,
+        "fat": recipe.fat,
+        "carbs": recipe.carbs,
+        "sugar": recipe.sugar,
+        "sodium_mg": recipe.sodium_mg,
     }
 
 
@@ -78,16 +96,21 @@ def home():
     return jsonify({"message": "Flask works!"})
 
 
+@main.route("/health")
+def health():
+    try:
+        db.session.execute(db.text("SELECT 1"))
+        return jsonify({"status": "ok", "database": "up"})
+    except Exception as exc:
+        return jsonify({"status": "error", "database": "down", "error": str(exc)}), 503
+
+
 @main.route("/recommendations")
 @jwt_required()
 def recommendations():
     user_id = int(get_jwt_identity())
     limit = request.args.get("limit", default=20, type=int)
-
-    payload, status = get_recommendations_for_user(
-        user_id=user_id,
-        limit=limit,
-    )
+    payload, status = get_recommendations_for_user(user_id=user_id, limit=limit)
     return jsonify(payload), status
 
 
@@ -98,59 +121,75 @@ def guest_feed():
         return jsonify({"error": "diet_id query param is required"}), 400
 
     recipes = (
-        db.session.query(Recipe, RecipeNutrientsPer100g)
+        db.session.query(Recipe)
         .join(RecipeDiet, RecipeDiet.recipe_id == Recipe.id)
-        .outerjoin(RecipeNutrientsPer100g, RecipeNutrientsPer100g.recipe_id == Recipe.id)
         .filter(RecipeDiet.diet_id == diet_id)
         .order_by(Recipe.id.asc())
         .all()
     )
 
-    return jsonify(
-        [
-            {
-                "id": recipe.id,
-                "title": recipe.title,
-                "cooking_method": recipe.cooking_method,
-                "description": recipe.description,
-                "nutrients_per_100g": {
-                    "kcal": nutrients.kcal if nutrients else None,
-                    "protein": nutrients.protein if nutrients else None,
-                    "fat": nutrients.fat if nutrients else None,
-                    "carbs": nutrients.carbs if nutrients else None,
-                    "sugar": nutrients.sugar if nutrients else None,
-                    "sodium_mg": nutrients.sodium_mg if nutrients else None,
-                },
-            }
-            for recipe, nutrients in recipes
-        ]
-    )
+    return jsonify([
+        {
+            "id": recipe.id,
+            "title": recipe.title,
+            "cooking_method": recipe.cooking_method,
+            "description": recipe.description,
+            "nutrients_per_100g": _serialize_nutrients(recipe),
+        }
+        for recipe in recipes
+    ])
 
 
 @main.route("/recipes")
 def get_recipes():
     diet_id = request.args.get("diet_id", type=int)
+    search = request.args.get("search", type=str)
+    cooking_method = request.args.get("cooking_method", type=str)
+    max_cooking_time = request.args.get("max_cooking_time", type=int)
+    page = max(1, request.args.get("page", default=1, type=int))
+    per_page = request.args.get("per_page", default=20, type=int)
+    per_page = max(1, min(per_page, 100))
 
     query = db.session.query(Recipe)
+
     if diet_id:
         query = (
             query.join(RecipeDiet, RecipeDiet.recipe_id == Recipe.id)
             .filter(RecipeDiet.diet_id == diet_id)
         )
+    if search:
+        pattern = f"%{search}%"
+        query = query.filter(or_(Recipe.title.ilike(pattern), Recipe.description.ilike(pattern)))
+    if cooking_method:
+        query = query.filter(Recipe.cooking_method == cooking_method)
+    if max_cooking_time:
+        query = query.filter(Recipe.cooking_time <= max_cooking_time)
 
-    recipes = query.order_by(Recipe.id.asc()).all()
+    total = query.with_entities(func.count(Recipe.id)).scalar() or 0
+    items = (
+        query.order_by(Recipe.id.asc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
 
-    return jsonify(
-        [
+    return jsonify({
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": (total + per_page - 1) // per_page if per_page else 1,
+        "recipes": [
             {
                 "id": recipe.id,
                 "title": recipe.title,
                 "cooking_method": recipe.cooking_method,
+                "cooking_time": recipe.cooking_time,
                 "description": recipe.description,
+                "nutrients_per_100g": _serialize_nutrients(recipe),
             }
-            for recipe in recipes
-        ]
-    )
+            for recipe in items
+        ],
+    })
 
 
 @main.route("/recipes/<int:recipe_id>")
@@ -159,42 +198,43 @@ def get_recipe_by_id(recipe_id: int):
     if not recipe:
         return jsonify({"error": "Recipe not found"}), 404
 
-    nutrients = db.session.get(RecipeNutrientsPer100g, recipe_id)
     ingredients = (
         db.session.query(RecipeIngredient, Product)
         .join(Product, Product.id == RecipeIngredient.product_id, isouter=True)
         .filter(RecipeIngredient.recipe_id == recipe_id)
+        .order_by(RecipeIngredient.id.asc())
         .all()
     )
 
-    return jsonify(
-        {
-            "id": recipe.id,
-            "title": recipe.title,
-            "description": recipe.description,
-            "cooking_method": recipe.cooking_method,
-            "cooking_time": recipe.cooking_time,
-            "servings": recipe.servings,
-            "instructions": recipe.instructions,
-            "nutrients_per_100g": {
-                "kcal": nutrients.kcal if nutrients else None,
-                "protein": nutrients.protein if nutrients else None,
-                "fat": nutrients.fat if nutrients else None,
-                "carbs": nutrients.carbs if nutrients else None,
-                "sugar": nutrients.sugar if nutrients else None,
-                "sodium_mg": nutrients.sodium_mg if nutrients else None,
-            },
-            "ingredients": [
-                {
-                    "product_id": ri.product_id,
-                    "ingredient_name": product.name if product else None,
-                    "quantity": ri.quantity,
-                    "unit": ri.unit,
-                }
-                for ri, product in ingredients
-            ],
-        }
-    )
+    return jsonify({
+        "id": recipe.id,
+        "title": recipe.title,
+        "description": recipe.description,
+        "cooking_method": recipe.cooking_method,
+        "cooking_time": recipe.cooking_time,
+        "servings": recipe.servings,
+        "instructions": recipe.instructions,
+        "nutrients_per_100g": _serialize_nutrients(recipe),
+        "ingredients": [
+            {
+                "product_id": ri.product_id,
+                "ingredient_name": (ri.display_name or (product.name if product else None)),
+                "product_name": product.name if product else None,
+                "product_category": product.category if product else None,
+                "quantity": ri.quantity,
+                "unit": ri.unit,
+            }
+            for ri, product in ingredients
+        ],
+    })
+
+
+@main.route("/recipes/<int:recipe_id>/personal")
+@jwt_required()
+def get_personal_recipe(recipe_id: int):
+    user_id = int(get_jwt_identity())
+    payload, status = get_personalized_recipe_for_user(user_id, recipe_id)
+    return jsonify(payload), status
 
 
 @main.route("/users/me")
@@ -202,18 +242,16 @@ def get_recipe_by_id(recipe_id: int):
 def get_current_user():
     user = get_authenticated_user()
     if not user:
-        return {"error": "User not found"}, 404
+        return jsonify({"error": "User not found"}), 404
 
-    return jsonify(
-        {
-            "id": user.id,
-            "email": user.email,
-            "selected_diet_id": user.selected_diet_id,
-            "profile": serialize_profile(user.profile),
-            "excluded_product_ids": get_user_preference_ids(user, "excluded"),
-            "favorite_product_ids": get_user_preference_ids(user, "favorite"),
-        }
-    )
+    return jsonify({
+        "id": user.id,
+        "email": user.email,
+        "selected_diet_id": user.selected_diet_id,
+        "profile": serialize_profile(user.profile),
+        "excluded_product_ids": get_user_preference_ids(user, "excluded"),
+        "favorite_product_ids": get_user_preference_ids(user, "favorite"),
+    })
 
 
 @main.route("/users/me/diet", methods=["POST"])
@@ -221,26 +259,41 @@ def get_current_user():
 def select_diet():
     user = get_authenticated_user()
     if not user:
-        return {"error": "User not found"}, 404
+        return jsonify({"error": "User not found"}), 404
 
     data = request.get_json() or {}
     diet_id = data.get("diet_id")
     if not diet_id:
-        return {"error": "diet_id required"}, 400
+        return jsonify({"error": "diet_id required"}), 400
 
     diet = db.session.get(Diet, diet_id)
     if not diet:
-        return {"error": "Diet not found"}, 404
+        return jsonify({"error": "Diet not found"}), 404
 
+    old_diet_id = user.selected_diet_id
     user.selected_diet_id = diet_id
-    db.session.commit()
 
-    return jsonify(
-        {
-            "message": "Diet selected",
-            "diet_id": diet_id,
-        }
-    )
+    if old_diet_id != diet_id:
+        new_allowed = get_allowed_product_ids_for_diet(diet_id)
+        pruned = 0
+        for pref in list(user.product_preferences):
+            if pref.preference_type == "excluded" and pref.product_id not in new_allowed:
+                db.session.delete(pref)
+                pruned += 1
+    else:
+        pruned = 0
+
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Could not switch diet"}), 400
+
+    return jsonify({
+        "message": "Diet selected",
+        "diet_id": diet_id,
+        "pruned_excluded_count": pruned,
+    })
 
 
 @main.route("/profile", methods=["GET"])
@@ -248,17 +301,28 @@ def select_diet():
 def get_profile():
     user = get_authenticated_user()
     if not user:
-        return {"error": "User not found"}, 404
+        return jsonify({"error": "User not found"}), 404
 
-    return jsonify(
-        {
-            "selected_diet_id": user.selected_diet_id,
-            "allowed_product_ids": sorted(list(get_allowed_product_ids_for_diet(user.selected_diet_id))),
-            "excluded_product_ids": get_user_preference_ids(user, "excluded"),
-            "favorite_product_ids": get_user_preference_ids(user, "favorite"),
-            "profile": serialize_profile(user.profile),
-        }
+    allowed_ids = sorted(get_allowed_product_ids_for_diet(user.selected_diet_id))
+    allowed_products = (
+        db.session.query(Product)
+        .filter(Product.id.in_(allowed_ids))
+        .order_by(Product.name.asc())
+        .all()
+        if allowed_ids else []
     )
+
+    return jsonify({
+        "selected_diet_id": user.selected_diet_id,
+        "allowed_product_ids": allowed_ids,
+        "allowed_products": [
+            {"id": p.id, "name": p.name, "category": p.category}
+            for p in allowed_products
+        ],
+        "excluded_product_ids": get_user_preference_ids(user, "excluded"),
+        "favorite_product_ids": get_user_preference_ids(user, "favorite"),
+        "profile": serialize_profile(user.profile),
+    })
 
 
 @main.route("/profile", methods=["PUT"])
@@ -266,162 +330,192 @@ def get_profile():
 def update_profile():
     user = get_authenticated_user()
     if not user:
-        return {"error": "User not found"}, 404
+        return jsonify({"error": "User not found"}), 404
 
     data = request.get_json() or {}
 
     if not user.profile:
         user.profile = UserProfile(user_id=user.id)
-
     profile = user.profile
 
+    old_diet_id = user.selected_diet_id
+    diet_changed = False
+
     if "selected_diet_id" in data:
-        diet_id = data["selected_diet_id"]
-        diet = db.session.get(Diet, diet_id)
+        new_diet_id = data["selected_diet_id"]
+        diet = db.session.get(Diet, new_diet_id)
         if not diet:
-            return {"error": "Diet not found"}, 404
-        user.selected_diet_id = diet_id
+            return jsonify({"error": "Diet not found"}), 404
 
-    allowed_product_ids = get_allowed_product_ids_for_diet(user.selected_diet_id)
+        if new_diet_id != old_diet_id:
+            user.selected_diet_id = new_diet_id
+            diet_changed = True
 
-    excluded_product_ids = set(
-        data.get(
-            "excluded_product_ids",
-            get_user_preference_ids(user, "excluded"),
+    db.session.flush()
+    allowed_ids = get_allowed_product_ids_for_diet(user.selected_diet_id)
+
+    explicitly_sent_excluded = "excluded_product_ids" in data
+    if diet_changed and not explicitly_sent_excluded:
+        q = db.session.query(UserProductPreference).filter(
+            UserProductPreference.user_id == user.id,
+            UserProductPreference.preference_type == "excluded",
         )
-    )
-    favorite_product_ids = set(
-        data.get(
-            "favorite_product_ids",
-            get_user_preference_ids(user, "favorite"),
-        )
-    )
+        if allowed_ids:
+            q = q.filter(~UserProductPreference.product_id.in_(allowed_ids))
+        q.delete(synchronize_session=False)
+        db.session.flush()
 
-    invalid_excluded = excluded_product_ids - allowed_product_ids if allowed_product_ids else set()
-    invalid_favorites = {
-        pid for pid in favorite_product_ids if not db.session.get(Product, pid)
+    current_excluded = {
+        row[0]
+        for row in db.session.query(UserProductPreference.product_id)
+        .filter(
+            UserProductPreference.user_id == user.id,
+            UserProductPreference.preference_type == "excluded",
+        )
+        .all()
+    }
+    current_favorite = {
+        row[0]
+        for row in db.session.query(UserProductPreference.product_id)
+        .filter(
+            UserProductPreference.user_id == user.id,
+            UserProductPreference.preference_type == "favorite",
+        )
+        .all()
     }
 
+    new_excluded = set(data.get("excluded_product_ids", current_excluded))
+    new_favorite = set(data.get("favorite_product_ids", current_favorite))
+
+    invalid_excluded = new_excluded - allowed_ids if allowed_ids else set()
     if invalid_excluded:
-        return {
+        db.session.rollback()
+        return jsonify({
             "error": "Excluded products must belong to allowed products of selected diet",
             "invalid_product_ids": sorted(invalid_excluded),
-        }, 400
+        }), 400
 
-    if invalid_favorites:
-        return {
-            "error": "Favorite products must exist",
-            "invalid_product_ids": sorted(invalid_favorites),
-        }, 400
+    if new_favorite:
+        existing_favs = {
+            row[0]
+            for row in db.session.query(Product.id)
+            .filter(Product.id.in_(new_favorite))
+            .all()
+        }
+        invalid_favorites = new_favorite - existing_favs
+        if invalid_favorites:
+            db.session.rollback()
+            return jsonify({
+                "error": "Favorite products must exist",
+                "invalid_product_ids": sorted(invalid_favorites),
+            }), 400
 
-    for field in [
-        "low_sodium",
-        "low_sugar",
-        "low_fat",
-        "no_spicy",
-        "no_acidic",
-        "no_saturated_fat",
-        "target_kcal",
-        "target_protein",
-        "target_fat",
-        "target_carbs",
-        "target_sugar",
-        "target_sodium_mg",
-        "reference_mass_g_per_day",
-    ]:
+    new_favorite = new_favorite - new_excluded
+
+    scalar_fields = [
+        "low_sodium", "low_sugar", "low_fat",
+        "no_spicy", "no_acidic", "no_saturated_fat",
+        "target_kcal", "target_protein", "target_fat",
+        "target_carbs", "target_sugar", "target_sodium_mg",
+    ]
+    for field in scalar_fields:
         if field in data:
             setattr(profile, field, data[field])
 
-    UserProductPreference.query.filter_by(user_id=user.id).delete()
+    if "preference_tags" in data:
+        raw_tags = data.get("preference_tags") or []
+        cleaned = sorted({
+            str(t).strip()
+            for t in raw_tags
+            if str(t).strip() in SUPPORTED_PREFERENCE_TAGS
+        })
+        profile.preference_tags = cleaned
 
-    for product_id in sorted(excluded_product_ids):
-        db.session.add(
-            UserProductPreference(
+    to_add_excluded = new_excluded - current_excluded
+    to_remove_excluded = current_excluded - new_excluded
+    to_add_favorite = new_favorite - current_favorite
+    to_remove_favorite = current_favorite - new_favorite
+
+    if to_remove_excluded:
+        db.session.query(UserProductPreference).filter(
+            UserProductPreference.user_id == user.id,
+            UserProductPreference.preference_type == "excluded",
+            UserProductPreference.product_id.in_(to_remove_excluded),
+        ).delete(synchronize_session=False)
+
+    if to_remove_favorite:
+        db.session.query(UserProductPreference).filter(
+            UserProductPreference.user_id == user.id,
+            UserProductPreference.preference_type == "favorite",
+            UserProductPreference.product_id.in_(to_remove_favorite),
+        ).delete(synchronize_session=False)
+
+    existing_rows = {
+        row.product_id: row
+        for row in db.session.query(UserProductPreference)
+        .filter(UserProductPreference.user_id == user.id)
+        .all()
+    }
+
+    for pid in sorted(to_add_excluded):
+        if pid in existing_rows:
+            existing_rows[pid].preference_type = "excluded"
+        else:
+            db.session.add(UserProductPreference(
                 user_id=user.id,
-                product_id=product_id,
+                product_id=pid,
                 preference_type="excluded",
-            )
-        )
+            ))
 
-    for product_id in sorted(favorite_product_ids):
-        db.session.add(
-            UserProductPreference(
+    for pid in sorted(to_add_favorite):
+        if pid in existing_rows:
+            existing_rows[pid].preference_type = "favorite"
+        else:
+            db.session.add(UserProductPreference(
                 user_id=user.id,
-                product_id=product_id,
+                product_id=pid,
                 preference_type="favorite",
-            )
-        )
+            ))
 
-    db.session.add(profile)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Invalid excluded products for selected diet"}), 400
 
-    return jsonify(
-        {
-            "message": "Profile updated",
-            "selected_diet_id": user.selected_diet_id,
-            "allowed_product_ids": sorted(list(allowed_product_ids)),
-            "excluded_product_ids": sorted(excluded_product_ids),
-            "favorite_product_ids": sorted(favorite_product_ids),
-            "profile": serialize_profile(profile),
-        }
-    )
+    return jsonify({
+        "message": "Profile updated",
+        "selected_diet_id": user.selected_diet_id,
+        "allowed_product_ids": sorted(allowed_ids),
+        "excluded_product_ids": sorted(new_excluded),
+        "favorite_product_ids": sorted(new_favorite),
+        "profile": serialize_profile(profile),
+    })
 
 
 @main.route("/diets")
 def get_diets():
     diets = db.session.query(Diet).order_by(Diet.id.asc()).all()
-
-    return jsonify(
-        [
-            {
-                "id": diet.id,
-                "name": diet.name,
-                "description": diet.description,
-            }
-            for diet in diets
-        ]
-    )
+    return jsonify([{"id": d.id, "name": d.name, "description": d.description} for d in diets])
 
 
 @main.route("/diets/<int:diet_id>/allowed-products")
 def get_allowed_products(diet_id: int):
-    product_ids = get_allowed_product_ids_for_diet(diet_id)
-
+    ids = get_allowed_product_ids_for_diet(diet_id)
     products = (
         db.session.query(Product)
-        .filter(Product.id.in_(product_ids))
+        .filter(Product.id.in_(ids))
         .order_by(Product.name.asc())
         .all()
-        if product_ids
-        else []
+        if ids else []
     )
-
-    return jsonify(
-        [
-            {
-                "id": product.id,
-                "name": product.name,
-                "category": product.category,
-            }
-            for product in products
-        ]
-    )
+    return jsonify([{"id": p.id, "name": p.name, "category": p.category} for p in products])
 
 
 @main.route("/products")
 def get_products():
     products = db.session.query(Product).order_by(Product.name.asc()).all()
-
-    return jsonify(
-        [
-            {
-                "id": product.id,
-                "name": product.name,
-                "category": product.category,
-            }
-            for product in products
-        ]
-    )
+    return jsonify([{"id": p.id, "name": p.name, "category": p.category} for p in products])
 
 
 @main.route("/users/me/excluded-products", methods=["GET"])
@@ -429,16 +523,8 @@ def get_products():
 def get_excluded_products():
     user = get_authenticated_user()
     if not user:
-        return {"error": "User not found"}, 404
-
-    records = (
-        db.session.query(UserProductPreference)
-        .filter_by(user_id=user.id, preference_type="excluded")
-        .order_by(UserProductPreference.product_id.asc())
-        .all()
-    )
-
-    return jsonify([{"product_id": record.product_id} for record in records])
+        return jsonify({"error": "User not found"}), 404
+    return jsonify([{"product_id": pid} for pid in get_user_preference_ids(user, "excluded")])
 
 
 @main.route("/users/me/excluded-products", methods=["POST"])
@@ -446,46 +532,43 @@ def get_excluded_products():
 def add_excluded_product():
     user = get_authenticated_user()
     if not user:
-        return {"error": "User not found"}, 404
+        return jsonify({"error": "User not found"}), 404
 
     data = request.get_json() or {}
     product_id = data.get("product_id")
-
     if not product_id:
-        return {"error": "product_id required"}, 400
+        return jsonify({"error": "product_id required"}), 400
 
     product = db.session.get(Product, product_id)
     if not product:
-        return {"error": "Product not found"}, 404
+        return jsonify({"error": "Product not found"}), 404
 
-    allowed_product_ids = get_allowed_product_ids_for_diet(user.selected_diet_id)
-    if allowed_product_ids and product_id not in allowed_product_ids:
-        return {
+    allowed_ids = get_allowed_product_ids_for_diet(user.selected_diet_id)
+    if allowed_ids and product_id not in allowed_ids:
+        return jsonify({
             "error": "Product must belong to allowed products of selected diet",
             "product_id": product_id,
-        }, 400
+        }), 400
 
     existing = (
         db.session.query(UserProductPreference)
-        .filter_by(
-            user_id=user.id,
-            product_id=product_id,
-            preference_type="excluded",
-        )
+        .filter_by(user_id=user.id, product_id=product_id)
         .first()
     )
     if existing:
-        return {"message": "Already excluded"}, 200
+        if existing.preference_type == "excluded":
+            return jsonify({"message": "Already excluded"}), 200
+        existing.preference_type = "excluded"
+    else:
+        db.session.add(UserProductPreference(user_id=user.id, product_id=product_id, preference_type="excluded"))
 
-    record = UserProductPreference(
-        user_id=user.id,
-        product_id=product_id,
-        preference_type="excluded",
-    )
-    db.session.add(record)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"error": "Invalid excluded product for selected diet"}), 400
 
-    return {"message": "Product excluded"}, 201
+    return jsonify({"message": "Product excluded"}), 201
 
 
 @main.route("/users/me/excluded-products/<int:product_id>", methods=["DELETE"])
@@ -493,25 +576,19 @@ def add_excluded_product():
 def remove_excluded_product(product_id):
     user = get_authenticated_user()
     if not user:
-        return {"error": "User not found"}, 404
+        return jsonify({"error": "User not found"}), 404
 
     record = (
         db.session.query(UserProductPreference)
-        .filter_by(
-            user_id=user.id,
-            product_id=product_id,
-            preference_type="excluded",
-        )
+        .filter_by(user_id=user.id, product_id=product_id, preference_type="excluded")
         .first()
     )
-
     if not record:
-        return {"error": "Not found"}, 404
+        return jsonify({"error": "Not found"}), 404
 
     db.session.delete(record)
     db.session.commit()
-
-    return {"message": "Removed"}
+    return jsonify({"message": "Removed"})
 
 
 @main.route("/users/me/favorite-products", methods=["GET"])
@@ -519,16 +596,8 @@ def remove_excluded_product(product_id):
 def get_favorite_products():
     user = get_authenticated_user()
     if not user:
-        return {"error": "User not found"}, 404
-
-    records = (
-        db.session.query(UserProductPreference)
-        .filter_by(user_id=user.id, preference_type="favorite")
-        .order_by(UserProductPreference.product_id.asc())
-        .all()
-    )
-
-    return jsonify([{"product_id": record.product_id} for record in records])
+        return jsonify({"error": "User not found"}), 404
+    return jsonify([{"product_id": pid} for pid in get_user_preference_ids(user, "favorite")])
 
 
 @main.route("/users/me/favorite-products", methods=["POST"])
@@ -536,39 +605,31 @@ def get_favorite_products():
 def add_favorite_product():
     user = get_authenticated_user()
     if not user:
-        return {"error": "User not found"}, 404
+        return jsonify({"error": "User not found"}), 404
 
     data = request.get_json() or {}
     product_id = data.get("product_id")
-
     if not product_id:
-        return {"error": "product_id required"}, 400
+        return jsonify({"error": "product_id required"}), 400
 
     product = db.session.get(Product, product_id)
     if not product:
-        return {"error": "Product not found"}, 404
+        return jsonify({"error": "Product not found"}), 404
 
     existing = (
         db.session.query(UserProductPreference)
-        .filter_by(
-            user_id=user.id,
-            product_id=product_id,
-            preference_type="favorite",
-        )
+        .filter_by(user_id=user.id, product_id=product_id)
         .first()
     )
     if existing:
-        return {"message": "Already added"}, 200
+        if existing.preference_type == "favorite":
+            return jsonify({"message": "Already added"}), 200
+        existing.preference_type = "favorite"
+    else:
+        db.session.add(UserProductPreference(user_id=user.id, product_id=product_id, preference_type="favorite"))
 
-    record = UserProductPreference(
-        user_id=user.id,
-        product_id=product_id,
-        preference_type="favorite",
-    )
-    db.session.add(record)
     db.session.commit()
-
-    return {"message": "Favorite product added"}, 201
+    return jsonify({"message": "Favorite product added"}), 201
 
 
 @main.route("/users/me/favorite-products/<int:product_id>", methods=["DELETE"])
@@ -576,22 +637,16 @@ def add_favorite_product():
 def remove_favorite_product(product_id):
     user = get_authenticated_user()
     if not user:
-        return {"error": "User not found"}, 404
+        return jsonify({"error": "User not found"}), 404
 
     record = (
         db.session.query(UserProductPreference)
-        .filter_by(
-            user_id=user.id,
-            product_id=product_id,
-            preference_type="favorite",
-        )
+        .filter_by(user_id=user.id, product_id=product_id, preference_type="favorite")
         .first()
     )
-
     if not record:
-        return {"error": "Not found"}, 404
+        return jsonify({"error": "Not found"}), 404
 
     db.session.delete(record)
     db.session.commit()
-
-    return {"message": "Removed"}
+    return jsonify({"message": "Removed"})
