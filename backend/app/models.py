@@ -24,8 +24,11 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(150), unique=True, nullable=False)
     password_hash = db.Column(db.Text, nullable=False)
-    selected_diet_id = db.Column(db.Integer, db.ForeignKey("diets.id"), nullable=False)
+    selected_diet_id = db.Column(db.Integer, db.ForeignKey("diets.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_verified = db.Column(db.Boolean, nullable=False, default=False)
+    verification_token = db.Column(db.String(256))
+    verification_token_expires_at = db.Column(db.DateTime)
 
     selected_diet = db.relationship("Diet")
     profile = db.relationship(
