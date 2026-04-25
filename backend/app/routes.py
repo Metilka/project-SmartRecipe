@@ -2,6 +2,7 @@ from sqlalchemy import func, or_
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from sqlalchemy.exc import IntegrityError
+from app.services.basket import add_to_basket, get_basket, get_totals, clear_basket
 
 from app.extensions import db
 from app.models import (
@@ -650,3 +651,100 @@ def remove_favorite_product(product_id):
     db.session.delete(record)
     db.session.commit()
     return jsonify({"message": "Removed"})
+
+
+@main.route("/basket", methods=["GET"])
+@jwt_required()
+def get_user_basket():
+    user_id = int(get_jwt_identity())
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    entries = get_basket(user_id)
+    totals = get_totals(user_id)
+
+    warnings = []
+    profile = user.profile
+    diet = user.selected_diet
+
+    if profile:
+        if profile.target_kcal and totals["kcal"] > profile.target_kcal:
+            warnings.append(f"Превышен лимит калорий: {totals['kcal']} из {profile.target_kcal} ккал")
+        if profile.target_protein and totals["protein"] > profile.target_protein:
+            warnings.append(f"Превышен лимит белка: {totals['protein']} из {profile.target_protein} г")
+        if profile.target_fat and totals["fat"] > profile.target_fat:
+            warnings.append(f"Превышен лимит жиров: {totals['fat']} из {profile.target_fat} г")
+        if profile.target_carbs and totals["carbs"] > profile.target_carbs:
+            warnings.append(f"Превышен лимит углеводов: {totals['carbs']} из {profile.target_carbs} г")
+        if profile.target_sugar and totals["sugar"] > profile.target_sugar:
+            warnings.append(f"Превышен лимит сахара: {totals['sugar']} из {profile.target_sugar} г")
+        if profile.target_sodium_mg and totals["sodium_mg"] > profile.target_sodium_mg:
+            warnings.append(f"Превышен лимит натрия: {totals['sodium_mg']} из {profile.target_sodium_mg} мг")
+
+    if diet:
+        if diet.max_calories and totals["kcal"] > diet.max_calories:
+            warnings.append(f"Превышена норма калорий по диете: {totals['kcal']} из {diet.max_calories} ккал")
+        if diet.max_salt_mg and totals["sodium_mg"] > diet.max_salt_mg:
+            warnings.append(f"Превышена норма соли по диете: {totals['sodium_mg']} из {diet.max_salt_mg} мг")
+
+    return jsonify({
+        "entries": entries,
+        "totals": totals,
+        "warnings": warnings,
+    })
+
+
+@main.route("/basket", methods=["POST"])
+@jwt_required()
+def add_recipe_to_basket():
+    user_id = int(get_jwt_identity())
+    user = get_authenticated_user()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    data = request.get_json() or {}
+    recipe_id = data.get("recipe_id")
+    servings = data.get("servings", 1)
+
+    if not recipe_id:
+        return jsonify({"error": "recipe_id required"}), 400
+    if not isinstance(servings, (int, float)) or servings <= 0:
+        return jsonify({"error": "servings must be a positive number"}), 400
+
+    recipe = db.session.get(Recipe, recipe_id)
+    if not recipe:
+        return jsonify({"error": "Recipe not found"}), 404
+
+    add_to_basket(user_id, recipe, servings)
+
+    return jsonify({"message": "Recipe added to basket"}), 201
+
+
+@main.route("/basket", methods=["DELETE"])
+@jwt_required()
+def clear_user_basket():
+    user_id = int(get_jwt_identity())
+    clear_basket(user_id)
+    return jsonify({"message": "Basket cleared"})
+
+
+@main.route("/products/<int:product_id>")
+def get_product_by_id(product_id: int):
+    product = db.session.get(Product, product_id)
+    if not product:
+        return jsonify({"error": "Product not found"}), 404
+
+    return jsonify({
+        "id": product.id,
+        "name": product.name,
+        "category": product.category,
+        "calories_per_100g": product.calories_per_100g,
+        "protein_per_100g": product.protein_per_100g,
+        "fat_per_100g": product.fat_per_100g,
+        "carbs_per_100g": product.carbs_per_100g,
+        "salt_mg_per_100g": product.salt_mg_per_100g,
+        "is_spicy": product.is_spicy,
+        "is_acidic": product.is_acidic,
+        "is_saturated_fat": product.is_saturated_fat,
+    })
