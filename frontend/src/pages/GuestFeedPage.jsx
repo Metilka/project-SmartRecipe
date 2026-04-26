@@ -1,13 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Loader from '../components/Loader';
 import RecipeCard from '../components/RecipeCard';
 import SectionCard from '../components/SectionCard';
-import { mockApi } from '../data/mockApi';
+import { recipesApi } from '../api';
 import { useDietrixStore } from '../hooks/useDietrixStore';
-import { SORT_OPTIONS } from '../utils/constants';
+import {
+  COOKING_METHOD_OPTIONS,
+  SORT_OPTIONS,
+} from '../utils/constants';
+import { sortRecipes } from '../utils/helpers';
 
 export default function GuestFeedPage() {
   const navigate = useNavigate();
@@ -15,30 +19,51 @@ export default function GuestFeedPage() {
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filters, setFilters] = useState({ query: '', sortBy: 'relevance' });
+  const [filters, setFilters] = useState({
+    query: '',
+    sortBy: 'default',
+    cookingMethod: 'all',
+  });
 
-  const loadRecipes = async () => {
+  // Debounce для поиска — чтобы не дёргать бэк на каждый символ
+  const debounceRef = useRef(null);
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedQuery(filters.query.trim());
+    }, 350);
+    return () => clearTimeout(debounceRef.current);
+  }, [filters.query]);
+
+  const loadRecipes = useCallback(async () => {
     if (!currentDiet) return;
 
     try {
       setLoading(true);
       setError('');
-      const response = await mockApi.fetchGuestFeed({
+      const response = await recipesApi.list({
         dietId: currentDiet.id,
-        query: filters.query,
-        sortBy: filters.sortBy,
+        search: debouncedQuery || undefined,
+        cookingMethod:
+          filters.cookingMethod !== 'all' ? filters.cookingMethod : undefined,
+        perPage: 50,
       });
-      setRecipes(response);
+      setRecipes(response.recipes || []);
     } catch (loadError) {
       setError(loadError.message || 'Не удалось загрузить ленту.');
+      setRecipes([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentDiet, debouncedQuery, filters.cookingMethod]);
 
   useEffect(() => {
     loadRecipes();
-  }, [currentDiet, filters.query, filters.sortBy]);
+  }, [loadRecipes]);
+
+  const sorted = sortRecipes(recipes, filters.sortBy);
 
   if (!currentDiet) {
     return <Navigate to="/guest/diets" replace />;
@@ -52,10 +77,10 @@ export default function GuestFeedPage() {
       >
         <div className="toolbar glass-inset">
           <div className="toolbar__group">
-            <div className="toolbar-pill">{currentDiet.id}</div>
+            <div className="toolbar-pill">№{currentDiet.id}</div>
             <div className="toolbar-copy">
               <strong>{currentDiet.name}</strong>
-              <span>{currentDiet.shortDescription}</span>
+              <span>{currentDiet.description}</span>
             </div>
           </div>
 
@@ -66,9 +91,32 @@ export default function GuestFeedPage() {
                 className="aero-input"
                 type="search"
                 value={filters.query}
-                onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
-                placeholder="Название, описание или способ приготовления"
+                onChange={(event) =>
+                  setFilters((current) => ({ ...current, query: event.target.value }))
+                }
+                placeholder="Название или описание"
               />
+            </label>
+
+            <label className="field-group field-group--inline field-group--narrow">
+              <span>Метод</span>
+              <select
+                className="aero-select"
+                value={filters.cookingMethod}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    cookingMethod: event.target.value,
+                  }))
+                }
+              >
+                <option value="all">Все методы</option>
+                {COOKING_METHOD_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <label className="field-group field-group--inline field-group--narrow">
@@ -76,7 +124,12 @@ export default function GuestFeedPage() {
               <select
                 className="aero-select"
                 value={filters.sortBy}
-                onChange={(event) => setFilters((current) => ({ ...current, sortBy: event.target.value }))}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    sortBy: event.target.value,
+                  }))
+                }
               >
                 {SORT_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -93,18 +146,22 @@ export default function GuestFeedPage() {
 
       {!loading && error && <ErrorState message={error} onRetry={loadRecipes} />}
 
-      {!loading && !error && !recipes.length && (
+      {!loading && !error && sorted.length === 0 && (
         <EmptyState
-          message="Похоже, текущий запрос слишком узкий. Попробуйте очистить поиск или сменить диету."
+          message="По текущим фильтрам рецептов не нашлось. Попробуйте очистить поиск или выбрать другой метод приготовления."
           actionLabel="Сменить диету"
           onAction={() => navigate('/guest/diets')}
         />
       )}
 
-      {!loading && !error && recipes.length > 0 && (
+      {!loading && !error && sorted.length > 0 && (
         <div className="card-list">
-          {recipes.map((recipe) => (
-            <RecipeCard key={recipe.id} recipe={recipe} onOpen={(recipeId) => navigate(`/guest/recipes/${recipeId}`)} />
+          {sorted.map((recipe) => (
+            <RecipeCard
+              key={recipe.id}
+              recipe={recipe}
+              onOpen={(recipeId) => navigate(`/guest/recipes/${recipeId}`)}
+            />
           ))}
         </div>
       )}

@@ -1,156 +1,249 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { dietLookup } from '../data/diets';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { authApi } from '../api/auth';
+import { dietsApi, profileApi } from '../api';
+import { onUnauthorized, tokenStore } from '../api/client';
 import { STORAGE_KEYS } from '../utils/constants';
-import { deepClone, uid } from '../utils/helpers';
-import { createBlankProfile } from '../utils/profile';
+import {
+  createEmptyProfile,
+  profileFromApi,
+  uid,
+} from '../utils/helpers';
 
 const DietrixContext = createContext(null);
 
-const defaultSession = {
-  mode: 'guest',
-  selectedDietId: null,
-  auth: {
-    isAuthenticated: false,
-    token: null,
-    user: null,
-  },
-  profile: createBlankProfile(),
-  toasts: [],
-};
-
-const readSession = () => {
-  if (typeof window === 'undefined') {
-    return defaultSession;
-  }
-
+const readLocalSession = () => {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEYS.session);
-    if (!raw) {
-      return defaultSession;
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+};
+
+const writeLocalSession = (payload) => {
+  try {
+    if (payload) {
+      window.localStorage.setItem(STORAGE_KEYS.session, JSON.stringify(payload));
+    } else {
+      window.localStorage.removeItem(STORAGE_KEYS.session);
     }
-    return { ...defaultSession, ...JSON.parse(raw) };
-  } catch (error) {
-    return defaultSession;
+  } catch (e) {
+    /* ignore */
   }
 };
 
 export function AppProvider({ children }) {
-  const [session, setSession] = useState(readSession);
+  const persisted = readLocalSession();
+
+  const [mode, setMode] = useState(persisted?.mode || 'guest');
+  const [authUser, setAuthUser] = useState(persisted?.authUser || null);
+  const [guestDietId, setGuestDietId] = useState(persisted?.guestDietId ?? null);
+  const [diets, setDiets] = useState([]);
+  const [dietsLoaded, setDietsLoaded] = useState(false);
+  const [profile, setProfile] = useState(createEmptyProfile());
+  const [bootstrapping, setBootstrapping] = useState(!!tokenStore.getAccess());
+  const [toasts, setToasts] = useState([]);
+
+  const toastTimersRef = useRef(new Map());
+
+  const dismissToast = useCallback((toastId) => {
+    setToasts((current) => current.filter((t) => t.id !== toastId));
+    const timer = toastTimersRef.current.get(toastId);
+    if (timer) {
+      clearTimeout(timer);
+      toastTimersRef.current.delete(toastId);
+    }
+  }, []);
+
+  const pushToast = useCallback(
+    (payload) => {
+      const toast = {
+        id: uid('toast'),
+        type: payload.type || 'info',
+        title: payload.title,
+        message: payload.message,
+      };
+      setToasts((current) => [...current, toast]);
+      const timer = setTimeout(() => dismissToast(toast.id), 3800);
+      toastTimersRef.current.set(toast.id, timer);
+    },
+    [dismissToast]
+  );
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEYS.session, JSON.stringify(session));
-  }, [session]);
+    if (mode === 'auth' && authUser) {
+      writeLocalSession({ mode, authUser, guestDietId });
+    } else if (mode === 'guest' && guestDietId) {
+      writeLocalSession({ mode: 'guest', authUser: null, guestDietId });
+    } else {
+      writeLocalSession(null);
+    }
+  }, [mode, authUser, guestDietId]);
 
-  const pushToast = (payload) => {
-    const toast = {
-      id: uid('toast'),
-      type: payload.type || 'info',
-      title: payload.title,
-      message: payload.message,
+  // Грузим список диет (публично, нужно и гостям)
+  useEffect(() => {
+    let cancelled = false;
+    dietsApi
+      .list()
+      .then((list) => {
+        if (!cancelled) {
+          setDiets(list || []);
+          setDietsLoaded(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDietsLoaded(true);
+      });
+    return () => {
+      cancelled = true;
     };
+  }, []);
 
-    setSession((current) => ({
-      ...current,
-      toasts: [...current.toasts, toast],
-    }));
+  // Восстанавливаем сессию по access_token из localStorage
+  useEffect(() => {
+    if (!tokenStore.getAccess()) {
+      setBootstrapping(false);
+      return;
+    }
 
-    window.setTimeout(() => {
-      setSession((current) => ({
-        ...current,
-        toasts: current.toasts.filter((item) => item.id !== toast.id),
-      }));
-    }, 3400);
-  };
+    let cancelled = false;
+    (async () => {
+      try {
+        const me = await authApi.me();
+        if (cancelled) return;
+        setAuthUser({ id: me.id, email: me.email });
+        setMode('auth');
+        setProfile(profileFromApi(me));
+      } catch (e) {
+        if (cancelled) return;
+        tokenStore.clear();
+        setMode('guest');
+        setAuthUser(null);
+      } finally {
+        if (!cancelled) setBootstrapping(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const dismissToast = (toastId) => {
-    setSession((current) => ({
-      ...current,
-      toasts: current.toasts.filter((item) => item.id !== toastId),
-    }));
-  };
+  // Обработка 401 от API-клиента
+  useEffect(() => {
+    const off = onUnauthorized(() => {
+      setAuthUser(null);
+      setMode('guest');
+      setProfile(createEmptyProfile());
+      pushToast({
+        type: 'warning',
+        title: 'Сессия истекла',
+        message: 'Войдите снова, чтобы продолжить.',
+      });
+    });
+    return off;
+  }, [pushToast]);
 
-  const selectGuestDiet = (dietId) => {
-    setSession((current) => ({
-      ...current,
-      mode: 'guest',
-      selectedDietId: dietId,
-    }));
-  };
+  const selectGuestDiet = useCallback((dietId) => {
+    setGuestDietId(dietId);
+    setMode('guest');
+  }, []);
 
-  const completeAuth = ({ token, user, profile }) => {
-    setSession((current) => ({
-      ...current,
-      mode: 'auth',
-      auth: {
-        isAuthenticated: true,
-        token,
-        user,
-      },
-      profile: deepClone(profile || current.profile || createBlankProfile()),
-      selectedDietId: user.dietId,
-    }));
-  };
+  const completeAuth = useCallback(async () => {
+    try {
+      const me = await authApi.me();
+      setAuthUser({ id: me.id, email: me.email });
+      setMode('auth');
+      setProfile(profileFromApi(me));
+    } catch (e) {
+      tokenStore.clear();
+      setAuthUser(null);
+      setMode('guest');
+      throw e;
+    }
+  }, []);
 
-  const logout = () => {
-    setSession((current) => ({
-      ...current,
-      mode: 'guest',
-      auth: defaultSession.auth,
-      profile: createBlankProfile(),
-    }));
-  };
+  const logout = useCallback(async () => {
+    await authApi.logout();
+    setAuthUser(null);
+    setMode('guest');
+    setProfile(createEmptyProfile());
+  }, []);
 
-  const saveProfile = (profile) => {
-    setSession((current) => ({
-      ...current,
-      profile: deepClone(profile),
-    }));
-  };
+  const refreshProfile = useCallback(async () => {
+    const data = await profileApi.get();
+    const ui = profileFromApi(data);
+    setProfile(ui);
+    return ui;
+  }, []);
 
-  const resetProfile = () => {
-    setSession((current) => ({
-      ...current,
-      profile: createBlankProfile(),
-    }));
-  };
+  const setProfileLocal = useCallback((next) => {
+    setProfile(next);
+  }, []);
 
-  const currentDietId = session.auth.isAuthenticated
-    ? session.auth.user?.dietId || session.selectedDietId
-    : session.selectedDietId;
+  const currentDietId =
+    mode === 'auth' ? profile.selected_diet_id : guestDietId;
 
-  const currentDiet = currentDietId ? dietLookup[currentDietId] : null;
+  const currentDiet = useMemo(() => {
+    if (!currentDietId) return null;
+    return diets.find((d) => d.id === currentDietId) || null;
+  }, [diets, currentDietId]);
 
   const value = useMemo(
     () => ({
-      session,
+      mode,
+      isAuthenticated: mode === 'auth' && !!authUser,
+      authUser,
+      diets,
+      dietsLoaded,
       currentDiet,
-      isAuthenticated: session.auth.isAuthenticated,
-      authUser: session.auth.user,
-      profile: session.profile,
-      toasts: session.toasts,
+      currentDietId,
+      profile,
+      toasts,
+      bootstrapping,
       actions: {
         selectGuestDiet,
         completeAuth,
         logout,
-        saveProfile,
-        resetProfile,
+        refreshProfile,
+        setProfileLocal,
         pushToast,
         dismissToast,
       },
     }),
-    [currentDiet, session]
+    [
+      mode,
+      authUser,
+      diets,
+      dietsLoaded,
+      currentDiet,
+      currentDietId,
+      profile,
+      toasts,
+      bootstrapping,
+      selectGuestDiet,
+      completeAuth,
+      logout,
+      refreshProfile,
+      setProfileLocal,
+      pushToast,
+      dismissToast,
+    ]
   );
 
   return <DietrixContext.Provider value={value}>{children}</DietrixContext.Provider>;
 }
 
 export const useDietrixStore = () => {
-  const context = useContext(DietrixContext);
-
-  if (!context) {
-    throw new Error('useDietrixStore must be used inside AppProvider');
-  }
-
-  return context;
+  const ctx = useContext(DietrixContext);
+  if (!ctx) throw new Error('useDietrixStore must be used inside AppProvider');
+  return ctx;
 };
-

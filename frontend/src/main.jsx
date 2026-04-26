@@ -7,6 +7,7 @@ import './styles/layouts.css';
 import './styles/components.css';
 import './styles/pages.css';
 import './styles/utilities.css';
+import './styles/additions.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

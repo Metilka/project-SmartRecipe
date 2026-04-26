@@ -1,74 +1,69 @@
 export const STORAGE_KEYS = {
-  session: 'dietrix_session_v1',
-  users: 'dietrix_users_v1',
+  session: 'dietrix_session_v2',
 };
 
-export const DEFAULT_TOP_N = 8;
-
 export const SORT_OPTIONS = [
-  { value: 'relevance', label: 'Сначала релевантные' },
+  { value: 'default', label: 'По умолчанию' },
   { value: 'title', label: 'По названию' },
   { value: 'kcal-asc', label: 'Меньше ккал' },
   { value: 'protein-desc', label: 'Больше белка' },
+  { value: 'cooking-time-asc', label: 'Быстрее готовится' },
 ];
 
-export const RECOMMENDATION_FILTERS = [
-  { value: 'all', label: 'Все ограничения' },
-  { value: 'low-sugar', label: 'Низкий сахар' },
-  { value: 'low-sodium', label: 'Низкий натрий' },
-  { value: 'gentle', label: 'Щадящий режим' },
-];
-
+// Медицинские флаги. id совпадает с именем колонки в user_profiles (backend).
 export const MEDICAL_FLAG_OPTIONS = [
   {
-    id: 'gentleDigestion',
-    label: 'Щадящее пищеварение',
-    helper: 'Убирает грубые и агрессивные сочетания, усиливает контроль метода приготовления.',
+    id: 'low_sodium',
+    label: 'Низкий натрий',
+    helper: 'Более строгий порог натрия при фильтрации рецептов.',
   },
   {
-    id: 'strictLowSugar',
-    label: 'Жёсткий контроль сахара',
-    helper: 'Применяет более строгий порог по сахару при фильтрации рецептов.',
+    id: 'low_sugar',
+    label: 'Низкий сахар',
+    helper: 'Ужесточает порог сахара на 100 г.',
   },
   {
-    id: 'strictLowSodium',
-    label: 'Жёсткий контроль натрия',
-    helper: 'Дополнительно ограничивает натрий в блюдах.',
+    id: 'low_fat',
+    label: 'Низкий жир',
+    helper: 'Снижает допустимую жирность для выдачи.',
   },
   {
-    id: 'reducedFat',
-    label: 'Сниженный жир',
-    helper: 'Дополнительно снижает допустимый жир для персональной выдачи.',
+    id: 'no_spicy',
+    label: 'Без острого',
+    helper: 'Исключает рецепты с острыми ингредиентами.',
+  },
+  {
+    id: 'no_acidic',
+    label: 'Без кислого',
+    helper: 'Исключает продукты с выраженной кислотностью.',
+  },
+  {
+    id: 'no_saturated_fat',
+    label: 'Без насыщенных жиров',
+    helper: 'Исключает ингредиенты с высоким содержанием насыщенных жиров.',
   },
 ];
 
+// Дневные цели. id совпадает с именем колонки в user_profiles.
 export const TARGET_FIELD_OPTIONS = [
-  { id: 'kcal', label: 'Ккал / сутки', min: 1000, max: 4000, step: 50 },
-  { id: 'protein', label: 'Белки / сутки, г', min: 40, max: 220, step: 5 },
-  { id: 'fat', label: 'Жиры / сутки, г', min: 20, max: 160, step: 5 },
-  { id: 'carbs', label: 'Углеводы / сутки, г', min: 40, max: 350, step: 5 },
-  { id: 'sugar', label: 'Сахар / сутки, г', min: 0, max: 120, step: 1 },
-  { id: 'sodium', label: 'Натрий / сутки, мг', min: 300, max: 4000, step: 50 },
+  { id: 'target_kcal', label: 'Ккал / сутки', min: 1000, max: 4000, step: 50 },
+  { id: 'target_protein', label: 'Белки / сутки, г', min: 40, max: 220, step: 5 },
+  { id: 'target_fat', label: 'Жиры / сутки, г', min: 20, max: 160, step: 5 },
+  { id: 'target_carbs', label: 'Углеводы / сутки, г', min: 40, max: 350, step: 5 },
+  { id: 'target_sugar', label: 'Сахар / сутки, г', min: 0, max: 120, step: 1 },
+  { id: 'target_sodium_mg', label: 'Натрий / сутки, мг', min: 300, max: 4000, step: 50 },
 ];
 
-export const PREFERENCE_OPTIONS = [
-  { id: 'breakfast', label: 'Завтрак' },
-  { id: 'quick', label: 'Быстрое приготовление' },
-  { id: 'fish', label: 'Больше рыбы' },
-  { id: 'poultry', label: 'Птица' },
-  { id: 'vegetables', label: 'Овощные блюда' },
-  { id: 'soup', label: 'Супы и крем-супы' },
-  { id: 'oven', label: 'Люблю запекание' },
-  { id: 'grain', label: 'Крупы и гарниры' },
-  { id: 'light-dinner', label: 'Лёгкий ужин' },
-];
-
+// Методы приготовления — ключи соответствуют значениям recipes.cooking_method в БД (на русском).
 export const COOKING_METHOD_LABELS = {
-  steamed: 'На пару',
-  boiled: 'Варка',
-  stewed: 'Тушение',
-  baked: 'Запекание',
-  baked_soft: 'Мягкое запекание',
-  grilled: 'Гриль',
-  fried: 'Жарка',
+  варка: 'Варка',
+  'на пару': 'На пару',
+  тушение: 'Тушение',
+  запекание: 'Запекание',
+  жарка: 'Жарка',
+  'без обработки': 'Без обработки',
 };
+
+export const COOKING_METHOD_OPTIONS = Object.entries(COOKING_METHOD_LABELS).map(
+  ([value, label]) => ({ value, label })
+);
