@@ -1,3 +1,4 @@
+import { formatCookingTime, formatMethodLabel } from '../utils/helpers';
 import NutrientTable from './NutrientTable';
 
 export default function RecipeCard({ recipe, onOpen }) {
@@ -5,18 +6,29 @@ export default function RecipeCard({ recipe, onOpen }) {
     <article className="recipe-card glass-panel">
       <div className="recipe-card__header">
         <div>
-          <span className="recipe-card__category">{recipe.category}</span>
           <h3>{recipe.title}</h3>
+          <div className="recipe-card__meta-row">
+            <span className="status-chip">{formatMethodLabel(recipe.cooking_method)}</span>
+            {recipe.cooking_time != null && (
+              <span className="status-chip subtle">
+                {formatCookingTime(recipe.cooking_time)}
+              </span>
+            )}
+          </div>
         </div>
-        <span className="status-chip">{recipe.cookingMethodLabel}</span>
       </div>
 
-      <p className="recipe-card__description">{recipe.description}</p>
-      <p className="recipe-card__summary">{recipe.preparationSummary}</p>
+      {recipe.description && (
+        <p className="recipe-card__description">{recipe.description}</p>
+      )}
 
-      <NutrientTable nutrients={recipe.nutrientsPer100g} compact />
+      <NutrientTable nutrients={recipe.nutrients_per_100g} compact />
 
-      <button className="aero-button secondary recipe-card__button" type="button" onClick={() => onOpen(recipe.id)}>
+      <button
+        className="aero-button secondary recipe-card__button"
+        type="button"
+        onClick={() => onOpen(recipe.id)}
+      >
         Подробнее
       </button>
     </article>

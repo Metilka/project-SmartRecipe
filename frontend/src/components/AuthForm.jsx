@@ -1,11 +1,9 @@
 import { useMemo, useState } from 'react';
-import { dietOptions } from '../data/diets';
 import Loader from './Loader';
 
 const initialState = {
   email: '',
   password: '',
-  dietId: '',
 };
 
 export default function AuthForm({ onLogin, onRegister }) {
@@ -18,23 +16,17 @@ export default function AuthForm({ onLogin, onRegister }) {
     () =>
       tab === 'login'
         ? 'Введите email и пароль, указанные при регистрации.'
-        : 'При регистрации необходимо выбрать диету.',
+        : 'После регистрации потребуется подтвердить почту — на неё придёт письмо со ссылкой.',
     [tab]
   );
 
   const validate = () => {
-    if (!/^\S+@\S+\.\S+$/.test(formState.email)) {
+    if (!/^\S+@\S+\.\S+$/.test(formState.email.trim())) {
       return 'Введите корректный email.';
     }
-
-    if (formState.password.trim().length < 6) {
-      return 'Пароль должен содержать минимум 6 символов.';
+    if (formState.password.length < 8) {
+      return 'Пароль должен содержать минимум 8 символов.';
     }
-
-    if (tab === 'register' && !formState.dietId) {
-      return 'Выберите диету для регистрации.';
-    }
-
     return '';
   };
 
@@ -47,7 +39,6 @@ export default function AuthForm({ onLogin, onRegister }) {
   const handleSubmit = async (event) => {
     event.preventDefault();
     const validationError = validate();
-
     if (validationError) {
       setFormError(validationError);
       return;
@@ -55,10 +46,14 @@ export default function AuthForm({ onLogin, onRegister }) {
 
     try {
       setSubmitting(true);
+      const payload = {
+        email: formState.email.trim(),
+        password: formState.password,
+      };
       if (tab === 'login') {
-        await onLogin({ email: formState.email, password: formState.password });
+        await onLogin(payload);
       } else {
-        await onRegister(formState);
+        await onRegister(payload);
       }
     } catch (error) {
       setFormError(error.message || 'Не удалось выполнить запрос.');
@@ -124,33 +119,24 @@ export default function AuthForm({ onLogin, onRegister }) {
             name="password"
             value={formState.password}
             onChange={handleChange}
-            placeholder="Минимум 6 символов"
+            placeholder="Минимум 8 символов"
             autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
           />
-          <small>Пароль хранится в зашифрованном виде.</small>
+          <small>Пароль хранится в зашифрованном виде (bcrypt).</small>
         </label>
-
-        {tab === 'register' && (
-          <label className="field-group">
-            <span>Диета</span>
-            <select className="aero-select" name="dietId" value={formState.dietId} onChange={handleChange}>
-              <option value="">Выберите диету</option>
-              {dietOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <small>Без выбора диеты регистрация невозможна.</small>
-          </label>
-        )}
 
         <div className="form-helper-text">{helperText}</div>
 
         {formError && <div className="form-alert form-alert--error">{formError}</div>}
 
         <button className="aero-button primary auth-submit" type="submit" disabled={submitting}>
-          {submitting ? <Loader inline label={tab === 'login' ? 'Входим…' : 'Создаём аккаунт…'} /> : tab === 'login' ? 'Войти' : 'Зарегистрироваться'}
+          {submitting ? (
+            <Loader inline label={tab === 'login' ? 'Входим…' : 'Создаём аккаунт…'} />
+          ) : tab === 'login' ? (
+            'Войти'
+          ) : (
+            'Зарегистрироваться'
+          )}
         </button>
       </form>
     </div>

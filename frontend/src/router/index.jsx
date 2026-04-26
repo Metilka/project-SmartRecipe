@@ -9,10 +9,13 @@ import NotFoundPage from '../pages/NotFoundPage';
 import PersonalRecipePage from '../pages/PersonalRecipePage';
 import ProfilePage from '../pages/ProfilePage';
 import RecommendationsPage from '../pages/RecommendationsPage';
+import VerifyEmailPendingPage from '../pages/VerifyEmailPendingPage';
+import Loader from '../components/Loader';
 import { useDietrixStore } from '../hooks/useDietrixStore';
 
 function RequireAuth() {
-  const { isAuthenticated } = useDietrixStore();
+  const { isAuthenticated, bootstrapping } = useDietrixStore();
+  if (bootstrapping) return <Loader fullScreen label="Восстанавливаем сессию…" />;
   return isAuthenticated ? <Outlet /> : <Navigate to="/auth" replace />;
 }
 
@@ -22,6 +25,7 @@ export default function AppRouter() {
       <Routes>
         <Route path="/auth" element={<AuthWindowLayout />}>
           <Route index element={<AuthPage />} />
+          <Route path="verify-pending" element={<VerifyEmailPendingPage />} />
         </Route>
 
         <Route element={<AppShell />}>

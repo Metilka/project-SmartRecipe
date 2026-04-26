@@ -6,11 +6,12 @@ const labels = {
   fat: 'Жиры',
   carbs: 'Углеводы',
   sugar: 'Сахар',
-  sodium: 'Натрий',
+  sodium_mg: 'Натрий',
 };
 
 export default function NutrientTable({ nutrients, compact = false }) {
-  const keys = ['kcal', 'protein', 'fat', 'carbs', 'sugar', 'sodium'];
+  const keys = ['kcal', 'protein', 'fat', 'carbs', 'sugar', 'sodium_mg'];
+  const safeNutrients = nutrients || {};
 
   if (compact) {
     return (
@@ -18,7 +19,7 @@ export default function NutrientTable({ nutrients, compact = false }) {
         {keys.map((key) => (
           <div key={key} className="nutrient-chip">
             <span>{labels[key]}</span>
-            <strong>{formatNutrientValue(key, nutrients[key])}</strong>
+            <strong>{formatNutrientValue(key, safeNutrients[key])}</strong>
           </div>
         ))}
       </div>
@@ -33,7 +34,7 @@ export default function NutrientTable({ nutrients, compact = false }) {
             {labels[key]}
           </span>
           <strong className="nutrient-row__value" role="cell">
-            {formatNutrientValue(key, nutrients[key])}
+            {formatNutrientValue(key, safeNutrients[key])}
           </strong>
         </div>
       ))}

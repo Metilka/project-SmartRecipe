@@ -1,6 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useDietrixStore } from '../hooks/useDietrixStore';
-import { formatDietLabel } from '../utils/helpers';
 
 const guestLinks = [
   { to: '/guest/diets', label: 'Диеты' },
@@ -14,10 +13,10 @@ const authLinks = [
 
 export default function Header() {
   const navigate = useNavigate();
-  const { isAuthenticated, authUser, currentDiet, session, actions } = useDietrixStore();
+  const { mode, isAuthenticated, authUser, currentDiet, actions } = useDietrixStore();
 
-  const handleLogout = () => {
-    actions.logout();
+  const handleLogout = async () => {
+    await actions.logout();
     actions.pushToast({
       type: 'info',
       title: 'Сессия завершена',
@@ -28,10 +27,15 @@ export default function Header() {
 
   return (
     <header className="app-header glass-panel">
-      <div className="header-brand" onClick={() => navigate(isAuthenticated ? '/recommendations' : '/guest/diets')}>
+      <div
+        className="header-brand"
+        onClick={() =>
+          navigate(isAuthenticated ? '/recommendations' : '/guest/diets')
+        }
+      >
         <div className="header-brand__orb" />
         <div>
-          <strong>Dietrix</strong>
+          <strong>SmartRecipe</strong>
           <span>Подбор рецептов по диетам</span>
         </div>
       </div>
@@ -60,10 +64,14 @@ export default function Header() {
       </nav>
 
       <div className="header-actions">
-        {currentDiet && <div className="status-chip">{formatDietLabel(currentDiet.id)}</div>}
+        {currentDiet && (
+          <div className="status-chip">
+            №{currentDiet.id} · {currentDiet.name}
+          </div>
+        )}
 
         <button
-          className={`mode-button ${session.mode === 'guest' ? 'is-active' : ''}`.trim()}
+          className={`mode-button ${mode === 'guest' ? 'is-active' : ''}`.trim()}
           type="button"
           onClick={() => navigate('/guest/diets')}
         >
@@ -71,7 +79,7 @@ export default function Header() {
         </button>
 
         <button
-          className={`mode-button ${session.mode === 'auth' ? 'is-active' : ''}`.trim()}
+          className={`mode-button ${mode === 'auth' ? 'is-active' : ''}`.trim()}
           type="button"
           onClick={() => navigate(isAuthenticated ? '/recommendations' : '/auth')}
         >
@@ -88,7 +96,11 @@ export default function Header() {
             </button>
           </>
         ) : (
-          <button className="aero-button primary" type="button" onClick={() => navigate('/auth')}>
+          <button
+            className="aero-button primary"
+            type="button"
+            onClick={() => navigate('/auth')}
+          >
             Вход / регистрация
           </button>
         )}

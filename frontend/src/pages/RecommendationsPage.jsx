@@ -1,19 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import EmptyState from '../components/EmptyState';
 import ErrorState from '../components/ErrorState';
 import Loader from '../components/Loader';
 import RecommendationCard from '../components/RecommendationCard';
 import SectionCard from '../components/SectionCard';
-import { mockApi } from '../data/mockApi';
+import { recommendationsApi } from '../api';
 import { useDietrixStore } from '../hooks/useDietrixStore';
-import { COOKING_METHOD_LABELS, RECOMMENDATION_FILTERS } from '../utils/constants';
+import { COOKING_METHOD_LABELS } from '../utils/constants';
 
 const defaultFilters = {
   query: '',
-  minScore: 55,
+  minScore: 0,
   method: 'all',
-  restriction: 'all',
 };
 
 export default function RecommendationsPage() {
@@ -24,40 +23,73 @@ export default function RecommendationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const loadRecommendations = async () => {
+  const loadRecommendations = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
-      const response = await mockApi.getRecommendations({
-        dietId: currentDiet.id,
-        profile,
-        filters,
-      });
-      setItems(response);
+      const response = await recommendationsApi.list({ limit: 30 });
+      // Бэкенд возвращает { user_id, diet_id, count, recipes: [...] }.
+      // Каждый item — это плоский объект с title, cooking_method,
+      // nutrients_per_100g, final_score, breakdown, fit_reasons и т. д.
+      const raw = Array.isArray(response)
+        ? response
+        : response.recipes || response.items || [];
+      setItems(raw);
     } catch (loadError) {
       setError(loadError.message || 'Не удалось получить персональную выдачу.');
+      setItems([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (currentDiet) {
       loadRecommendations();
+    } else {
+      setLoading(false);
     }
-  }, [currentDiet, profile, filters.query, filters.minScore, filters.method, filters.restriction]);
+  }, [currentDiet, profile, loadRecommendations]);
+
+  const filteredItems = useMemo(() => {
+    const q = filters.query.trim().toLowerCase();
+    return items.filter((item) => {
+      const score = typeof item.final_score === 'number' ? item.final_score : 0;
+      if (score < filters.minScore) return false;
+      if (filters.method !== 'all' && item.cooking_method !== filters.method) {
+        return false;
+      }
+      if (q) {
+        const hay = `${item.title || ''} ${item.description || ''}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [items, filters.query, filters.minScore, filters.method]);
 
   const stats = useMemo(() => {
-    if (!items.length) {
-      return { count: 0, averageScore: 0 };
-    }
-
-    const averageScore = Math.round(items.reduce((sum, item) => sum + item.finalScore, 0) / items.length);
-    return { count: items.length, averageScore };
-  }, [items]);
+    if (!filteredItems.length) return { count: 0, averageScore: 0 };
+    const avg =
+      filteredItems.reduce(
+        (sum, item) => sum + (item.final_score || 0),
+        0
+      ) / filteredItems.length;
+    return { count: filteredItems.length, averageScore: Math.round(avg) };
+  }, [filteredItems]);
 
   if (loading && !items.length) {
     return <Loader fullScreen label="Формируем персональную выдачу…" />;
+  }
+
+  if (!currentDiet) {
+    return (
+      <EmptyState
+        title="Диета не выбрана"
+        message="Зайдите в профиль и выберите диету, чтобы получать персональные рекомендации."
+        actionLabel="В профиль"
+        onAction={() => navigate('/profile')}
+      />
+    );
   }
 
   return (
@@ -68,7 +100,7 @@ export default function RecommendationsPage() {
       >
         <div className="toolbar glass-inset toolbar--multi-line">
           <div className="toolbar__group">
-            <div className="toolbar-pill">{currentDiet.id}</div>
+            <div className="toolbar-pill">№{currentDiet.id}</div>
             <div className="toolbar-copy">
               <strong>{stats.count} рецептов в выдаче</strong>
               <span>Средняя оценка: {stats.averageScore}</span>
@@ -82,7 +114,9 @@ export default function RecommendationsPage() {
                 className="aero-input"
                 type="search"
                 value={filters.query}
-                onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
+                onChange={(event) =>
+                  setFilters((c) => ({ ...c, query: event.target.value }))
+                }
                 placeholder="Название или описание"
               />
             </label>
@@ -95,7 +129,12 @@ export default function RecommendationsPage() {
                 min="0"
                 max="100"
                 value={filters.minScore}
-                onChange={(event) => setFilters((current) => ({ ...current, minScore: Number(event.target.value) }))}
+                onChange={(event) =>
+                  setFilters((c) => ({
+                    ...c,
+                    minScore: Number(event.target.value) || 0,
+                  }))
+                }
               />
             </label>
 
@@ -104,7 +143,9 @@ export default function RecommendationsPage() {
               <select
                 className="aero-select"
                 value={filters.method}
-                onChange={(event) => setFilters((current) => ({ ...current, method: event.target.value }))}
+                onChange={(event) =>
+                  setFilters((c) => ({ ...c, method: event.target.value }))
+                }
               >
                 <option value="all">Все методы</option>
                 {Object.entries(COOKING_METHOD_LABELS).map(([value, label]) => (
@@ -114,40 +155,35 @@ export default function RecommendationsPage() {
                 ))}
               </select>
             </label>
-
-            <label className="field-group field-group--inline field-group--narrow">
-              <span>Ограничения</span>
-              <select
-                className="aero-select"
-                value={filters.restriction}
-                onChange={(event) => setFilters((current) => ({ ...current, restriction: event.target.value }))}
-              >
-                {RECOMMENDATION_FILTERS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
           </div>
         </div>
       </SectionCard>
 
-      {loading && items.length > 0 && <Loader label="Обновляем карточки под новые фильтры…" />}
+      {loading && items.length > 0 && (
+        <Loader label="Обновляем карточки под новые фильтры…" />
+      )}
       {!loading && error && <ErrorState message={error} onRetry={loadRecommendations} />}
 
-      {!loading && !error && !items.length && (
+      {!loading && !error && filteredItems.length === 0 && (
         <EmptyState
-          message="Ограничения стали слишком строгими. Попробуйте уменьшить список исключённых продуктов, скорректировать дневные цели или фильтры."
+          message={
+            items.length === 0
+              ? 'По текущим ограничениям рецептов не найдено. Попробуйте ослабить медицинские флаги или уменьшить список исключённых продуктов.'
+              : 'По текущим фильтрам ничего не нашлось. Попробуйте снизить минимальную оценку или сменить метод приготовления.'
+          }
           actionLabel="Изменить профиль"
           onAction={() => navigate('/profile')}
         />
       )}
 
-      {!error && items.length > 0 && (
+      {!error && filteredItems.length > 0 && (
         <div className="card-list">
-          {items.map((item) => (
-            <RecommendationCard key={item.recipe.id} item={item} onOpen={(recipeId) => navigate(`/recipes/${recipeId}/personal`)} />
+          {filteredItems.map((item) => (
+            <RecommendationCard
+              key={item.recipe_id}
+              item={item}
+              onOpen={(recipeId) => navigate(`/recipes/${recipeId}/personal`)}
+            />
           ))}
         </div>
       )}

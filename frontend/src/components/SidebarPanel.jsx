@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom';
 import { useDietrixStore } from '../hooks/useDietrixStore';
+import { MEDICAL_FLAG_OPTIONS } from '../utils/constants';
 
 export default function SidebarPanel() {
   const { currentDiet, isAuthenticated, profile } = useDietrixStore();
 
-  const activeFlags = Object.values(profile.medicalFlags || {}).filter(Boolean).length;
+  const activeFlags = Object.entries(profile.flags || {}).filter(([, v]) => v);
+  const excludedCount = profile.excluded_product_ids?.length || 0;
 
   return (
     <aside className="sidebar-panel">
@@ -20,27 +22,32 @@ export default function SidebarPanel() {
           <div className="sidebar-stat-list">
             <div>
               <span>Диета</span>
-              <strong>{currentDiet.id}</strong>
+              <strong>№{currentDiet.id}</strong>
             </div>
-            <div>
-              <span>Исключения</span>
-              <strong>{profile.excludedProducts?.length || 0}</strong>
-            </div>
-            <div>
-              <span>Ограничения</span>
-              <strong>{activeFlags}</strong>
-            </div>
+            {isAuthenticated && (
+              <>
+                <div>
+                  <span>Исключений</span>
+                  <strong>{excludedCount}</strong>
+                </div>
+                <div>
+                  <span>Ограничений</span>
+                  <strong>{activeFlags.length}</strong>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
 
-      {currentDiet && (
+      {isAuthenticated && activeFlags.length > 0 && (
         <div className="glass-panel sidebar-widget">
-          <div className="sidebar-widget__eyebrow">Ключевые ограничения</div>
+          <div className="sidebar-widget__eyebrow">Активные ограничения</div>
           <ul className="sidebar-list">
-            {currentDiet.restrictions.slice(0, 4).map((restriction) => (
-              <li key={restriction}>{restriction}</li>
-            ))}
+            {activeFlags.map(([flagId]) => {
+              const opt = MEDICAL_FLAG_OPTIONS.find((o) => o.id === flagId);
+              return <li key={flagId}>{opt?.label || flagId}</li>;
+            })}
           </ul>
         </div>
       )}
