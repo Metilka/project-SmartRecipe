@@ -26,9 +26,6 @@ class User(db.Model):
     password_hash = db.Column(db.Text, nullable=False)
     selected_diet_id = db.Column(db.Integer, db.ForeignKey("diets.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    is_verified = db.Column(db.Boolean, nullable=False, default=False)
-    verification_token = db.Column(db.String(256))
-    verification_token_expires_at = db.Column(db.DateTime)
 
     selected_diet = db.relationship("Diet")
     profile = db.relationship(
@@ -69,7 +66,7 @@ class UserProfile(db.Model):
         server_default="{}",
     )
 
-    # Deprecated, kept for backward compatibility only. Scoring ignores it.
+    # Совместимость со старой схемой; расчёт рекомендаций поле не использует.
     reference_mass_g_per_day = db.Column(db.Float, default=2000)
 
     user = db.relationship("User", back_populates="profile")
@@ -103,7 +100,7 @@ class Recipe(db.Model):
     servings = db.Column(db.Integer)
     instructions = db.Column(db.Text)
 
-    # Nutrients are stored directly on recipes to keep schema at 10 tables
+    # Нутриенты хранятся в рецепте без отдельной таблицы показателей.
     kcal = db.Column(db.Float, nullable=False)
     protein = db.Column(db.Float, nullable=False)
     fat = db.Column(db.Float, nullable=False)

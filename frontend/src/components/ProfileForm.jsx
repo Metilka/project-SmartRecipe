@@ -38,7 +38,7 @@ export default function ProfileForm({
         excluded_product_ids: isExcluded
           ? current.excluded_product_ids.filter((id) => id !== productId)
           : [...current.excluded_product_ids, productId],
-        // Одновременно не может быть в favorites
+        // Продукт не может быть одновременно исключённым и избранным.
         favorite_product_ids: isExcluded
           ? current.favorite_product_ids
           : current.favorite_product_ids.filter((id) => id !== productId),

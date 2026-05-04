@@ -91,3 +91,28 @@ export const recommendationsApi = {
     });
   },
 };
+
+// ---- Корзина (дневной план) -----------------------------------------------
+// Backend держит корзину в памяти процесса, обнуляется при смене даты или
+// при рестарте контейнера. Один пользователь — одна корзина на день.
+
+export const basketApi = {
+  // GET /basket → { entries: [...], totals: {...}, warnings: [...] }
+  async get() {
+    return http.get('/basket', { auth: true });
+  },
+
+  // POST /basket — добавить рецепт в корзину
+  async add({ recipeId, servings = 1 }) {
+    return http.post(
+      '/basket',
+      { recipe_id: recipeId, servings },
+      { auth: true }
+    );
+  },
+
+  // DELETE /basket — очистить корзину
+  async clear() {
+    return http.del('/basket', { auth: true });
+  },
+};

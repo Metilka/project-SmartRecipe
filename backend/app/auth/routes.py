@@ -1,6 +1,5 @@
 import re
-import secrets
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import (
@@ -10,9 +9,8 @@ from flask_jwt_extended import (
     get_jwt_identity,
     get_jwt,
 )
-from flask_mail import Message
 
-from app.extensions import db, bcrypt, jwt_blocklist, mail
+from app.extensions import db, bcrypt, jwt_blocklist
 from app.models import User
 
 auth = Blueprint("auth", __name__)
@@ -20,9 +18,10 @@ auth = Blueprint("auth", __name__)
 
 @auth.route("/auth/register", methods=["POST"])
 def register():
-    data = request.get_json()
-    email = data.get("email")
-    password = data.get("password")
+    data = request.get_json() or {}
+
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
 
     if not email or not password:
         return jsonify({"error": "Email and password required"}), 400
@@ -38,64 +37,30 @@ def register():
         return jsonify({"error": "User already exists"}), 400
 
     password_hash = bcrypt.generate_password_hash(password).decode("utf-8")
-
-    token = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(hours=24)
-
     new_user = User(
         email=email,
         password_hash=password_hash,
         created_at=datetime.utcnow(),
-        verification_token=token,
-        verification_token_expires_at=expires_at,
     )
+
+    selected_diet_id = data.get("diet_id") or data.get("dietId") or data.get("selected_diet_id")
+    if selected_diet_id and hasattr(new_user, "selected_diet_id"):
+        new_user.selected_diet_id = int(selected_diet_id)
 
     db.session.add(new_user)
     db.session.commit()
 
-    verify_url = f"http://localhost:5000/auth/verify-email?token={token}"
-    msg = Message(
-        subject="Подтвердите вашу почту — SmartRecipe",
-        recipients=[email],
-        body=f"Здравствуйте!\n\nДля подтверждения почты перейдите по ссылке:\n{verify_url}\n\nСсылка действительна 24 часа.",
-    )
-    mail.send(msg)
-
     return jsonify({
-        "message": "User created. Please check your email to verify your account.",
-        "user_id": new_user.id,
+        "message": "User created",
+        "user_id": new_user.id
     }), 201
-
-
-@auth.route("/auth/verify-email", methods=["GET"])
-def verify_email():
-    token = request.args.get("token")
-    if not token:
-        return jsonify({"error": "Token is required"}), 400
-
-    user = User.query.filter_by(verification_token=token).first()
-    if not user:
-        return jsonify({"error": "Invalid token"}), 400
-
-    if user.verification_token_expires_at < datetime.utcnow():
-        return jsonify({"error": "Token has expired"}), 400
-
-    if user.is_verified:
-        return jsonify({"message": "Email already verified"}), 200
-
-    user.is_verified = True
-    user.verification_token = None
-    user.verification_token_expires_at = None
-    db.session.commit()
-
-    return jsonify({"message": "Email verified successfully"}), 200
 
 
 @auth.route("/auth/login", methods=["POST"])
 def login():
-    data = request.get_json()
-    email = data.get("email")
-    password = data.get("password")
+    data = request.get_json() or {}
+    email = (data.get("email") or "").strip().lower()
+    password = data.get("password") or ""
 
     if not email or not password:
         return jsonify({"error": "Email and password required"}), 400
@@ -107,16 +72,13 @@ def login():
     if not bcrypt.check_password_hash(user.password_hash, password):
         return jsonify({"error": "Invalid credentials"}), 401
 
-    if not user.is_verified:
-        return jsonify({"error": "Please verify your email before logging in"}), 403
-
     access_token = create_access_token(identity=str(user.id))
     refresh_token = create_refresh_token(identity=str(user.id))
 
     return jsonify({
         "access_token": access_token,
         "refresh_token": refresh_token,
-        "user_id": user.id,
+        "user_id": user.id
     })
 
 

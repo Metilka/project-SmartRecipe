@@ -1,9 +1,6 @@
-from flask import Flask,jsonify
+from flask import Flask, jsonify
 from config import Config
-from app.extensions import db, bcrypt, jwt, jwt_blocklist,mail
-
-
-
+from app.extensions import db, bcrypt, jwt, jwt_blocklist
 
 
 def create_app():
@@ -14,7 +11,6 @@ def create_app():
     db.init_app(app)
     bcrypt.init_app(app)
     jwt.init_app(app)
-    mail.init_app(app)
 
     @jwt.token_in_blocklist_loader
     def check_if_token_revoked(jwt_header, jwt_payload):

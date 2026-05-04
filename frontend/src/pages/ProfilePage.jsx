@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ErrorState from '../components/ErrorState';
 import Loader from '../components/Loader';
@@ -11,28 +11,28 @@ import { profileFromApi, profileToApi } from '../utils/helpers';
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { authUser, diets, currentDiet, profile, actions } = useDietrixStore();
+  const { pushToast, refreshProfile, setProfileLocal } = actions;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dietChanging, setDietChanging] = useState(false);
   const [error, setError] = useState('');
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
-      await actions.refreshProfile();
+      await refreshProfile();
     } catch (e) {
       setError(e.message || 'Не удалось загрузить профиль.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [refreshProfile]);
 
   useEffect(() => {
     reload();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reload]);
 
   const handleSave = async (nextProfile) => {
     try {
@@ -47,14 +47,14 @@ export default function ProfilePage() {
         allowed_products: profile.allowed_products,
         profile: response.profile,
       };
-      actions.setProfileLocal(profileFromApi(merged));
-      actions.pushToast({
+      setProfileLocal(profileFromApi(merged));
+      pushToast({
         type: 'success',
         title: 'Профиль сохранён',
         message: 'Изменения учтены в персональной выдаче.',
       });
     } catch (e) {
-      actions.pushToast({
+      pushToast({
         type: 'error',
         title: 'Ошибка сохранения',
         message: e.message || 'Не удалось сохранить профиль.',
@@ -66,8 +66,8 @@ export default function ProfilePage() {
 
   const handleReset = async () => {
     try {
-      await actions.refreshProfile();
-      actions.pushToast({
+      await refreshProfile();
+      pushToast({
         type: 'info',
         title: 'Изменения отменены',
         message: 'Загружены актуальные данные с сервера.',
@@ -82,14 +82,14 @@ export default function ProfilePage() {
     try {
       setDietChanging(true);
       await profileApi.selectDiet(nextDietId);
-      await actions.refreshProfile();
-      actions.pushToast({
+      await refreshProfile();
+      pushToast({
         type: 'success',
         title: 'Диета изменена',
         message: 'Список разрешённых продуктов обновлён.',
       });
     } catch (e) {
-      actions.pushToast({
+      pushToast({
         type: 'error',
         title: 'Не удалось сменить диету',
         message: e.message || 'Попробуйте ещё раз.',
