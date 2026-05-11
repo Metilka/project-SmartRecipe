@@ -1,0 +1,62 @@
+{
+  "name": "smartrecipe-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SmartRecipe desktop shell",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --dir",
+    "dist:nsis": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+    "build": {
+    "appId": "ru.smartrecipe.dietrix",
+    "productName": "SmartRecipe",
+    "icon": "build/icon.ico",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to": "frontend"
+      },
+      {
+        "from": "../backend/dist/smartrecipe-api",
+        "to": "backend"
+      },
+      {
+        "from": "../database/seed.sql",
+        "to": "database/seed.sql"
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "runtime/postgres",
+        "to": "postgres"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SmartRecipe"
+    }
+  }
+}
