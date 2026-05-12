@@ -1,13 +1,40 @@
+import { useState } from 'react';
+import { basketApi } from '../api';
+import { useDietrixStore } from '../hooks/useDietrixStore';
 import { formatMethodLabel, formatNutrientValue } from '../utils/helpers';
 import ScoreBadge from './ScoreBadge';
 
 export default function RecommendationCard({ item, onOpen }) {
+  const { actions } = useDietrixStore();
+  const [adding, setAdding] = useState(false);
+
   // Бэкенд кладёт поля рецепта прямо в item: title, description, cooking_method,
   // nutrients_per_100g, final_score, breakdown, fit_reasons, penalties, explain
   const nutrients = item.nutrients_per_100g || {};
   const reasons = Array.isArray(item.fit_reasons) ? item.fit_reasons : [];
   const score =
     typeof item.final_score === 'number' ? Math.round(item.final_score) : 0;
+
+  const handleAddToBasket = async (event) => {
+    event.stopPropagation();
+    try {
+      setAdding(true);
+      await basketApi.add({ recipeId: item.recipe_id, servings: 1 });
+      actions.pushToast({
+        type: 'success',
+        title: 'Добавлено в план',
+        message: `${item.title} — 1 порция.`,
+      });
+    } catch (e) {
+      actions.pushToast({
+        type: 'error',
+        title: 'Не удалось добавить',
+        message: e.message || 'Попробуйте ещё раз.',
+      });
+    } finally {
+      setAdding(false);
+    }
+  };
 
   return (
     <article className="recommendation-card glass-panel">
@@ -54,13 +81,23 @@ export default function RecommendationCard({ item, onOpen }) {
         </div>
       )}
 
-      <button
-        className="aero-button primary"
-        type="button"
-        onClick={() => onOpen(item.recipe_id)}
-      >
-        Открыть
-      </button>
+      <div className="recommendation-card__actions">
+        <button
+          className="aero-button primary"
+          type="button"
+          onClick={() => onOpen(item.recipe_id)}
+        >
+          Открыть
+        </button>
+        <button
+          className="aero-button secondary"
+          type="button"
+          onClick={handleAddToBasket}
+          disabled={adding}
+        >
+          {adding ? 'Добавляем…' : '+ В план'}
+        </button>
+      </div>
     </article>
   );
 }

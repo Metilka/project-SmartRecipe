@@ -300,6 +300,12 @@ textarea.aero-input:focus {
   color: #8d3838;
 }
 
+.form-alert--success {
+  background: rgba(226, 246, 233, 0.94);
+  border: 1px solid rgba(91, 170, 111, 0.48);
+  color: #2f6b44;
+}
+
 @media (max-width: 920px) {
   .field-group--inline,
   .field-group--narrow {

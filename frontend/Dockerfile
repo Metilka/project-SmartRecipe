@@ -1,28 +1,20 @@
-# ---- Этап 1: собираем SPA ---------------------------------------------------
 FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Сначала lock-файлы для кэша npm
-COPY package.json ./
-# package-lock.json может отсутствовать — используем wildcard
-COPY package-lock.json* ./
-
-RUN npm install
+# package-lock.json включает npm ci и ускоряет повторные сборки.
+COPY package*.json ./
+RUN npm config set registry https://registry.npmjs.org/ && npm config set fetch-retries 5 && npm config set fetch-retry-mintimeout 20000 && npm config set fetch-retry-maxtimeout 120000 && npm config set fetch-timeout 600000 && if [ -f package-lock.json ]; then npm ci --no-audit --no-fund --loglevel=verbose; else npm install --no-audit --no-fund --loglevel=verbose; fi
 
 COPY . .
 
-# Собираем в /app/dist
 RUN npm run build
 
-# ---- Этап 2: nginx, который отдаёт сборку и проксирует /api -> backend ------
 FROM nginx:1.27-alpine
 
-# Свой конфиг вместо дефолтного
 RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Статика
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 80

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import Loader from './Loader';
 
 const initialState = {
@@ -11,14 +11,7 @@ export default function AuthForm({ onLogin, onRegister }) {
   const [formState, setFormState] = useState(initialState);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
-
-  const helperText = useMemo(
-    () =>
-      tab === 'login'
-        ? 'Введите email и пароль, указанные при регистрации.'
-        : 'После регистрации потребуется подтвердить почту — на неё придёт письмо со ссылкой.',
-    [tab]
-  );
+  const [formSuccess, setFormSuccess] = useState('');
 
   const validate = () => {
     if (!/^\S+@\S+\.\S+$/.test(formState.email.trim())) {
@@ -33,6 +26,7 @@ export default function AuthForm({ onLogin, onRegister }) {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setFormError('');
+    setFormSuccess('');
     setFormState((current) => ({ ...current, [name]: value }));
   };
 
@@ -41,8 +35,11 @@ export default function AuthForm({ onLogin, onRegister }) {
     const validationError = validate();
     if (validationError) {
       setFormError(validationError);
+      setFormSuccess('');
       return;
     }
+
+    setFormSuccess('');
 
     try {
       setSubmitting(true);
@@ -54,6 +51,9 @@ export default function AuthForm({ onLogin, onRegister }) {
         await onLogin(payload);
       } else {
         await onRegister(payload);
+        setFormSuccess('Регистрация прошла успешно. Теперь войдите в аккаунт.');
+        setTab('login');
+        setFormState((current) => ({ ...current, password: '' }));
       }
     } catch (error) {
       setFormError(error.message || 'Не удалось выполнить запрос.');
@@ -80,6 +80,7 @@ export default function AuthForm({ onLogin, onRegister }) {
           onClick={() => {
             setTab('login');
             setFormError('');
+            setFormSuccess('');
           }}
         >
           Вход
@@ -90,6 +91,7 @@ export default function AuthForm({ onLogin, onRegister }) {
           onClick={() => {
             setTab('register');
             setFormError('');
+            setFormSuccess('');
           }}
         >
           Регистрация
@@ -108,7 +110,6 @@ export default function AuthForm({ onLogin, onRegister }) {
             placeholder="name@example.com"
             autoComplete="email"
           />
-          <small>Используется как логин для режима персонализации.</small>
         </label>
 
         <label className="field-group">
@@ -122,11 +123,9 @@ export default function AuthForm({ onLogin, onRegister }) {
             placeholder="Минимум 8 символов"
             autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
           />
-          <small>Пароль хранится в зашифрованном виде (bcrypt).</small>
         </label>
 
-        <div className="form-helper-text">{helperText}</div>
-
+        {formSuccess && <div className="form-alert form-alert--success">{formSuccess}</div>}
         {formError && <div className="form-alert form-alert--error">{formError}</div>}
 
         <button className="aero-button primary auth-submit" type="submit" disabled={submitting}>

@@ -19,7 +19,7 @@ export const formatNutrientValue = (key, value) => {
   return `${rounded} ${unit}`;
 };
 
-// Сортировка по полям, которые реально приходят из API (/recipes, /feed).
+// Сортировка по полям, которые возвращают /recipes и /feed.
 // nutrients_per_100g: { kcal, protein, fat, carbs, sugar, sodium_mg }
 export const sortRecipes = (recipes, sortBy) => {
   const list = [...recipes];
@@ -129,8 +129,7 @@ export const profileToApi = (uiProfile) => {
     }
   });
 
-  // Фронтенд больше не использует preference_tags — отправляем пустой массив,
-  // чтобы сбросить возможные старые значения на сервере.
+  // Сбрасываем legacy-теги, если они остались у пользователя.
   payload.preference_tags = [];
 
   return payload;

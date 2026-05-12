@@ -9,6 +9,7 @@ const guestLinks = [
 const authLinks = [
   { to: '/profile', label: 'Профиль' },
   { to: '/recommendations', label: 'Рекомендации' },
+  { to: '/basket', label: 'План' },
 ];
 
 export default function Header() {

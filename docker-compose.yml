@@ -1,0 +1,59 @@
+# SmartRecipe / Dietrix: Postgres, Flask API и React/nginx.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: smartrecipe-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-med_diet_db}
+      LANG: en_US.utf8
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./database/seed.sql:/seed-raw/seed.sql:ro
+      - ./database/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    ports:
+      - "${DB_EXTERNAL_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-med_diet_db}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    build:
+      context: ./backend
+    container_name: smartrecipe-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-med_diet_db}
+
+      FLASK_DEBUG: "0"
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-please-change-me-in-production}
+      BACKEND_HOST: 0.0.0.0
+      BACKEND_PORT: "5000"
+    ports:
+      - "${BACKEND_EXTERNAL_PORT:-5000}:5000"
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: smartrecipe-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+
+volumes:
+  db-data:

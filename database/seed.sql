@@ -10,7 +10,6 @@
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -36,7 +35,6 @@ ALTER DATABASE med_diet_db OWNER TO postgres;
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET idle_in_transaction_session_timeout = 0;
-SET transaction_timeout = 0;
 SET client_encoding = 'UTF8';
 SET standard_conforming_strings = on;
 SELECT pg_catalog.set_config('search_path', '', false);
@@ -428,7 +426,7 @@ CREATE TABLE public.users (
     id integer NOT NULL,
     email public.citext NOT NULL,
     password_hash text NOT NULL,
-    selected_diet_id integer NOT NULL,
+    selected_diet_id integer,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -2539,4 +2537,3 @@ ALTER TABLE ONLY public.users
 --
 
 \unrestrict NWbalkDwFzDfckusu6OyuSKNYuH1Bjuahgbr6vFSyZODgZMIygDvfdeF9D7SkWy
-

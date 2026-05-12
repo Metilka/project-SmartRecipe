@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom
 import AppShell from '../layouts/AppShell';
 import AuthWindowLayout from '../layouts/AuthWindowLayout';
 import AuthPage from '../pages/AuthPage';
+import BasketPage from '../pages/BasketPage';
 import GuestDietSelectionPage from '../pages/GuestDietSelectionPage';
 import GuestFeedPage from '../pages/GuestFeedPage';
 import GuestRecipePage from '../pages/GuestRecipePage';
@@ -9,7 +10,6 @@ import NotFoundPage from '../pages/NotFoundPage';
 import PersonalRecipePage from '../pages/PersonalRecipePage';
 import ProfilePage from '../pages/ProfilePage';
 import RecommendationsPage from '../pages/RecommendationsPage';
-import VerifyEmailPendingPage from '../pages/VerifyEmailPendingPage';
 import Loader from '../components/Loader';
 import { useDietrixStore } from '../hooks/useDietrixStore';
 
@@ -25,7 +25,6 @@ export default function AppRouter() {
       <Routes>
         <Route path="/auth" element={<AuthWindowLayout />}>
           <Route index element={<AuthPage />} />
-          <Route path="verify-pending" element={<VerifyEmailPendingPage />} />
         </Route>
 
         <Route element={<AppShell />}>
@@ -37,6 +36,7 @@ export default function AppRouter() {
           <Route element={<RequireAuth />}>
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/recommendations" element={<RecommendationsPage />} />
+            <Route path="/basket" element={<BasketPage />} />
             <Route path="/recipes/:recipeId/personal" element={<PersonalRecipePage />} />
           </Route>
 

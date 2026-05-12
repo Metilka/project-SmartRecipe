@@ -94,7 +94,7 @@ async function refreshAccessToken() {
         return data.access_token;
       })
       .finally(() => {
-        // Allow subsequent refreshes after this one completes
+        // Следующий refresh можно запускать только после завершения текущего.
         setTimeout(() => {
           refreshPromise = null;
         }, 0);
@@ -136,7 +136,7 @@ async function doFetch(method, path, { body, auth = false, retry = true, query }
     );
   }
 
-  // Попытка получить JSON (даже для ошибок, чтобы вытащить error message)
+  // Читаем JSON и для успешных, и для ошибочных ответов.
   let data = null;
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json')) {
@@ -151,7 +151,7 @@ async function doFetch(method, path, { body, auth = false, retry = true, query }
     return data;
   }
 
-  // 401 и есть refresh-токен → попробовать обновить access и повторить один раз
+  // При 401 один раз обновляем access-токен и повторяем запрос.
   if (response.status === 401 && auth && retry) {
     try {
       await refreshAccessToken();

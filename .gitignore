@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.venv-*/
+build/
+dist/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Frontend build output
+frontend/dist/
+frontend/node_modules/
+
+# Backend build output
+backend/build/
+backend/dist/
+backend/.venv-desktop/
+
+# Electron build output
+desktop/dist/
+desktop/node_modules/
+
+# Local bundled runtime. Keep the placeholder, not the binaries.
+desktop/runtime/postgres/
+!desktop/runtime/
+!desktop/runtime/.gitkeep
+
+# Local environment files
+.env
+*.local

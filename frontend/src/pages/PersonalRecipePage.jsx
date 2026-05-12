@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import ErrorState from '../components/ErrorState';
 import Loader from '../components/Loader';
@@ -6,19 +6,22 @@ import NutrientTable from '../components/NutrientTable';
 import RecipeBreakdown from '../components/RecipeBreakdown';
 import ScoreBadge from '../components/ScoreBadge';
 import SectionCard from '../components/SectionCard';
-import { recipesApi } from '../api';
+import { basketApi, recipesApi } from '../api';
 import { useDietrixStore } from '../hooks/useDietrixStore';
 import { formatCookingTime, formatMethodLabel } from '../utils/helpers';
 
 export default function PersonalRecipePage() {
   const navigate = useNavigate();
   const { recipeId } = useParams();
-  const { currentDiet } = useDietrixStore();
+  const { currentDiet, actions } = useDietrixStore();
+  const { pushToast } = actions;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [servings, setServings] = useState(1);
+  const [adding, setAdding] = useState(false);
 
-  const loadRecipe = async () => {
+  const loadRecipe = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -29,12 +32,11 @@ export default function PersonalRecipePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [recipeId]);
 
   useEffect(() => {
     loadRecipe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipeId]);
+  }, [loadRecipe]);
 
   if (loading) {
     return <Loader fullScreen label="Оцениваем рецепт по вашему профилю…" />;
@@ -73,19 +75,65 @@ export default function PersonalRecipePage() {
     .map((step) => step.trim())
     .filter(Boolean);
 
+  const handleAddToBasket = async () => {
+    try {
+      setAdding(true);
+      await basketApi.add({ recipeId: recipe.id, servings });
+      pushToast({
+        type: 'success',
+        title: 'Добавлено в план',
+        message: `${recipe.title} — ${servings} ${servings === 1 ? 'порция' : 'порций'}.`,
+      });
+    } catch (e) {
+      pushToast({
+        type: 'error',
+        title: 'Не удалось добавить',
+        message: e.message || 'Попробуйте ещё раз.',
+      });
+    } finally {
+      setAdding(false);
+    }
+  };
+
   return (
     <div className="page-stack">
       <SectionCard
         title="Персональная страница рецепта"
         subtitle="Подробная карточка с оценкой соответствия вашему профилю."
         actions={
-          <button
-            className="aero-button secondary"
-            type="button"
-            onClick={() => navigate(-1)}
-          >
-            Назад
-          </button>
+          <div className="recipe-page-actions">
+            <button
+              className="aero-button secondary"
+              type="button"
+              onClick={() => navigate(-1)}
+            >
+              Назад
+            </button>
+            <div className="servings-control">
+              <label>
+                Порций:
+                <input
+                  className="aero-input aero-input--narrow"
+                  type="number"
+                  min="0.5"
+                  max="20"
+                  step="0.5"
+                  value={servings}
+                  onChange={(e) =>
+                    setServings(Math.max(0.5, Number(e.target.value) || 1))
+                  }
+                />
+              </label>
+            </div>
+            <button
+              className="aero-button primary"
+              type="button"
+              onClick={handleAddToBasket}
+              disabled={adding}
+            >
+              {adding ? 'Добавляем…' : '+ В план'}
+            </button>
+          </div>
         }
       >
         <div className="recipe-hero recipe-hero--personal">
