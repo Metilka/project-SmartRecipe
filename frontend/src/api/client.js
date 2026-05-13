@@ -1,14 +1,8 @@
-// Базовый HTTP-клиент для общения с Flask API.
-// В dev Vite проксирует все /api/* на backend (vite.config.js).
-// В production nginx проксирует /api/* на backend контейнер.
-// Поэтому BASE_URL = '/api', а бэкенд слушает без префикса.
 
 const BASE_URL = '/api';
 
 const STORAGE_ACCESS = 'dietrix_access_token';
 const STORAGE_REFRESH = 'dietrix_refresh_token';
-
-// ---- token storage ----------------------------------------------------------
 
 export const tokenStore = {
   getAccess() {
@@ -50,8 +44,6 @@ export const tokenStore = {
   },
 };
 
-// ---- error -----------------------------------------------------------------
-
 export class ApiError extends Error {
   constructor(message, { status, data } = {}) {
     super(message);
@@ -61,16 +53,12 @@ export class ApiError extends Error {
   }
 }
 
-// ---- hooks to listen for auth events (logout on refresh failure) -----------
-
 const listeners = new Set();
 export const onUnauthorized = (fn) => {
   listeners.add(fn);
   return () => listeners.delete(fn);
 };
 const emitUnauthorized = () => listeners.forEach((fn) => fn());
-
-// ---- refresh logic ---------------------------------------------------------
 
 let refreshPromise = null;
 
@@ -94,7 +82,6 @@ async function refreshAccessToken() {
         return data.access_token;
       })
       .finally(() => {
-        // Следующий refresh можно запускать только после завершения текущего.
         setTimeout(() => {
           refreshPromise = null;
         }, 0);
@@ -103,8 +90,6 @@ async function refreshAccessToken() {
 
   return refreshPromise;
 }
-
-// ---- core request function -------------------------------------------------
 
 async function doFetch(method, path, { body, auth = false, retry = true, query } = {}) {
   const url = new URL(`${BASE_URL}${path}`, window.location.origin);
@@ -136,7 +121,6 @@ async function doFetch(method, path, { body, auth = false, retry = true, query }
     );
   }
 
-  // Читаем JSON и для успешных, и для ошибочных ответов.
   let data = null;
   const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('application/json')) {
@@ -151,7 +135,6 @@ async function doFetch(method, path, { body, auth = false, retry = true, query }
     return data;
   }
 
-  // При 401 один раз обновляем access-токен и повторяем запрос.
   if (response.status === 401 && auth && retry) {
     try {
       await refreshAccessToken();
