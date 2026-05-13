@@ -9,10 +9,17 @@ const setup = (props = {}) => {
   const user = userEvent.setup();
   const onLogin = props.onLogin || vi.fn().mockResolvedValue(undefined);
   const onRegister = props.onRegister || vi.fn().mockResolvedValue(undefined);
+  const onContinueAsGuest = props.onContinueAsGuest;
 
-  const view = render(<AuthForm onLogin={onLogin} onRegister={onRegister} />);
+  const view = render(
+    <AuthForm
+      onLogin={onLogin}
+      onRegister={onRegister}
+      onContinueAsGuest={onContinueAsGuest}
+    />
+  );
 
-  return { user, onLogin, onRegister, ...view };
+  return { user, onLogin, onRegister, onContinueAsGuest, ...view };
 };
 
 const submitForm = (container) => {
@@ -95,5 +102,15 @@ describe('AuthForm', () => {
 
     expect(await screen.findByText('User already exists')).toBeInTheDocument();
     expect(screen.queryByText('Регистрация прошла успешно. Теперь войдите в аккаунт.')).not.toBeInTheDocument();
+  });
+
+  it('allows returning to guest mode from registration', async () => {
+    const onContinueAsGuest = vi.fn();
+    const { user } = setup({ onContinueAsGuest });
+
+    await user.click(screen.getByRole('button', { name: 'Регистрация' }));
+    await user.click(screen.getByRole('button', { name: 'Вернуться в гостевой режим' }));
+
+    expect(onContinueAsGuest).toHaveBeenCalledTimes(1);
   });
 });

@@ -41,7 +41,7 @@ export default function GuestDietSelectionPage() {
       >
         <div className="hero-banner">
           <div>
-            <h3>SmartRecipe работает в двух режимах</h3>
+            <h3>DIETRIX работает в двух режимах</h3>
             <p>
               Сейчас вы в гостевом сценарии: сначала выберите диету, затем просматривайте
               ленту рецептов без учёта персонального профиля.

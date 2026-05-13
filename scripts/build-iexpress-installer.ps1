@@ -4,16 +4,16 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $desktopDir = Join-Path $repoRoot "desktop"
 $distDir = Join-Path $desktopDir "dist"
 $unpackedDir = Join-Path $distDir "win-unpacked"
-$installerPath = Join-Path $distDir "SmartRecipe Setup 1.0.0.exe"
+$installerPath = Join-Path $distDir "Dietrix Setup 1.0.0.exe"
 $iconPath = Join-Path $desktopDir "build\icon.ico"
-$workRoot = Join-Path $env:TEMP "SmartRecipeIExpress"
+$workRoot = Join-Path $env:TEMP "DietrixIExpress"
 $stageDir = Join-Path $workRoot "stage"
-$tempInstallerPath = Join-Path $workRoot "SmartRecipe Setup 1.0.0.exe"
-$zipPath = Join-Path $stageDir "SmartRecipe-app.zip"
-$installerScript = Join-Path $stageDir "install-smartrecipe.ps1"
-$sedPath = Join-Path $stageDir "smartrecipe-iexpress.sed"
+$tempInstallerPath = Join-Path $workRoot "Dietrix Setup 1.0.0.exe"
+$zipPath = Join-Path $stageDir "Dietrix-app.zip"
+$installerScript = Join-Path $stageDir "install-dietrix.ps1"
+$sedPath = Join-Path $stageDir "dietrix-iexpress.sed"
 
-if (-not (Test-Path (Join-Path $unpackedDir "SmartRecipe.exe"))) {
+if (-not (Test-Path (Join-Path $unpackedDir "Dietrix.exe"))) {
     throw "Electron unpacked build was not found. Run npm.cmd run pack in desktop first."
 }
 
@@ -40,7 +40,7 @@ Compress-Archive -Path (Join-Path $unpackedDir "*") -DestinationPath $zipPath -C
 @'
 $ErrorActionPreference = "Stop"
 
-$zipPath = Join-Path $PSScriptRoot "SmartRecipe-app.zip"
+$zipPath = Join-Path $PSScriptRoot "Dietrix-app.zip"
 
 Add-Type -AssemblyName System.Windows.Forms
 
@@ -69,15 +69,15 @@ function Select-Folder {
 }
 
 $programsParent = Select-Folder `
-    -Title "Select the folder where the SmartRecipe program folder will be created." `
+    -Title "Select the folder where the Dietrix program folder will be created." `
     -DefaultPath (Join-Path $env:LOCALAPPDATA "Programs")
 
 $dataParent = Select-Folder `
-    -Title "Select the folder where SmartRecipe data will be stored." `
+    -Title "Select the folder where Dietrix data will be stored." `
     -DefaultPath $env:APPDATA
 
-$installDir = Join-Path $programsParent "SmartRecipe"
-$dataDir = Join-Path $dataParent "SmartRecipe"
+$installDir = Join-Path $programsParent "Dietrix"
+$dataDir = Join-Path $dataParent "Dietrix"
 
 if (Test-Path $installDir) {
     Remove-Item -LiteralPath $installDir -Recurse -Force
@@ -92,24 +92,24 @@ $installConfigPath = Join-Path $installDir "resources\install-config.json"
     dataDir = $dataDir
 } | ConvertTo-Json | Set-Content -LiteralPath $installConfigPath -Encoding UTF8
 
-$exePath = Join-Path $installDir "SmartRecipe.exe"
+$exePath = Join-Path $installDir "Dietrix.exe"
 if (-not (Test-Path $exePath)) {
-    throw "SmartRecipe.exe was not installed."
+    throw "Dietrix.exe was not installed."
 }
 
 $shell = New-Object -ComObject WScript.Shell
 
 $desktopDir = [Environment]::GetFolderPath("DesktopDirectory")
-$desktopShortcut = $shell.CreateShortcut((Join-Path $desktopDir "SmartRecipe.lnk"))
+$desktopShortcut = $shell.CreateShortcut((Join-Path $desktopDir "Dietrix.lnk"))
 $desktopShortcut.TargetPath = $exePath
 $desktopShortcut.WorkingDirectory = $installDir
 $desktopShortcut.Save()
 
 $programsDir = [Environment]::GetFolderPath("Programs")
-$startMenuDir = Join-Path $programsDir "SmartRecipe"
+$startMenuDir = Join-Path $programsDir "Dietrix"
 New-Item -ItemType Directory -Force -Path $startMenuDir | Out-Null
 
-$startMenuShortcut = $shell.CreateShortcut((Join-Path $startMenuDir "SmartRecipe.lnk"))
+$startMenuShortcut = $shell.CreateShortcut((Join-Path $startMenuDir "Dietrix.lnk"))
 $startMenuShortcut.TargetPath = $exePath
 $startMenuShortcut.WorkingDirectory = $installDir
 $startMenuShortcut.Save()
@@ -135,8 +135,8 @@ InstallPrompt=
 DisplayLicense=
 FinishMessage=
 TargetName=$tempInstallerPath
-FriendlyName=SmartRecipe
-AppLaunched=powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File install-smartrecipe.ps1
+FriendlyName=Dietrix
+AppLaunched=powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File install-dietrix.ps1
 PostInstallCmd=<None>
 AdminQuietInstCmd=
 UserQuietInstCmd=
@@ -150,8 +150,8 @@ SourceFiles0=$stageDir
 %FILE1%=
 
 [Strings]
-FILE0="SmartRecipe-app.zip"
-FILE1="install-smartrecipe.ps1"
+FILE0="Dietrix-app.zip"
+FILE1="install-dietrix.ps1"
 "@ | Set-Content -LiteralPath $sedPath -Encoding ASCII
 
 iexpress.exe /N /Q $sedPath
@@ -186,6 +186,37 @@ function Wait-FileReady {
     throw "File was not ready in ${TimeoutSeconds}s: $Path"
 }
 
+function Wait-FileStable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [int]$TimeoutSeconds = 300
+    )
+
+    $lastLength = -1
+    $stableTicks = 0
+
+    for ($i = 0; $i -lt $TimeoutSeconds; $i++) {
+        if (Test-Path $Path) {
+            $currentLength = (Get-Item -LiteralPath $Path).Length
+            if ($currentLength -gt 0 -and $currentLength -eq $lastLength) {
+                $stableTicks += 1
+                if ($stableTicks -ge 3) {
+                    return
+                }
+            } else {
+                $stableTicks = 0
+                $lastLength = $currentLength
+            }
+        }
+
+        Start-Sleep -Seconds 1
+    }
+
+    throw "File size did not stabilize in ${TimeoutSeconds}s: $Path"
+}
+
 for ($i = 0; $i -lt 300 -and -not (Test-Path $tempInstallerPath); $i++) {
     Start-Sleep -Seconds 1
 }
@@ -195,7 +226,27 @@ if (-not (Test-Path $tempInstallerPath)) {
 }
 
 Wait-FileReady -Path $tempInstallerPath
+Wait-FileStable -Path $tempInstallerPath
 Copy-Item -LiteralPath $tempInstallerPath -Destination $installerPath -Force
-powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot "scripts\set-pe-icon.ps1") -ExePath $installerPath -IconPath $iconPath
+$iconResult = Start-Process `
+    -FilePath "powershell" `
+    -ArgumentList @(
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        (Join-Path $repoRoot "scripts\set-pe-icon.ps1"),
+        "-ExePath",
+        $installerPath,
+        "-IconPath",
+        $iconPath
+    ) `
+    -NoNewWindow `
+    -Wait `
+    -PassThru
+
+if ($iconResult.ExitCode -ne 0) {
+    Write-Warning "Installer was created, but icon update was skipped because set-pe-icon failed."
+}
 
 Write-Host "IExpress installer created: $installerPath"
