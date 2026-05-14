@@ -3,7 +3,17 @@ param(
     [string]$ExePath,
 
     [Parameter(Mandatory = $true)]
-    [string]$IconPath
+    [string]$IconPath,
+
+    [string]$ProductName,
+
+    [string]$ProductVersion,
+
+    [string]$FileDescription,
+
+    [string]$CompanyName,
+
+    [string]$OriginalFilename
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,7 +37,30 @@ if (-not $rcedit) {
     throw "rcedit-x64.exe was not found in electron-builder cache. Run electron-builder once or install rcedit."
 }
 
-& $rcedit.FullName $ExePath --set-icon $IconPath
+$arguments = @($ExePath, "--set-icon", $IconPath)
+
+if ($ProductName) {
+    $arguments += @("--set-version-string", "ProductName", $ProductName)
+}
+
+if ($ProductVersion) {
+    $arguments += @("--set-product-version", $ProductVersion)
+    $arguments += @("--set-file-version", $ProductVersion)
+}
+
+if ($FileDescription) {
+    $arguments += @("--set-version-string", "FileDescription", $FileDescription)
+}
+
+if ($CompanyName) {
+    $arguments += @("--set-version-string", "CompanyName", $CompanyName)
+}
+
+if ($OriginalFilename) {
+    $arguments += @("--set-version-string", "OriginalFilename", $OriginalFilename)
+}
+
+& $rcedit.FullName @arguments
 if ($LASTEXITCODE -ne 0) {
     throw "rcedit failed with exit code $LASTEXITCODE"
 }

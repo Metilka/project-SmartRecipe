@@ -58,14 +58,48 @@ finally {
 
 Push-Location $desktopDir
 try {
-    Invoke-Checked "npm.cmd" "install"
+    $env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
+
+    if (Test-Path "package-lock.json") {
+        Invoke-Checked "npm.cmd" "ci"
+    } else {
+        Invoke-Checked "npm.cmd" "install"
+    }
     Invoke-Checked "npm.cmd" "run" "pack"
 }
 finally {
     Pop-Location
 }
 
-Invoke-Checked "powershell" "-NoProfile" "-ExecutionPolicy" "Bypass" "-File" (Join-Path $repoRoot "scripts\set-pe-icon.ps1") "-ExePath" (Join-Path $desktopDir "dist\win-unpacked\Dietrix.exe") "-IconPath" (Join-Path $desktopDir "build\icon.ico")
-Invoke-Checked "powershell" "-NoProfile" "-ExecutionPolicy" "Bypass" "-File" (Join-Path $repoRoot "scripts\build-iexpress-installer.ps1")
+Invoke-Checked `
+    "powershell" `
+    "-NoProfile" `
+    "-ExecutionPolicy" `
+    "Bypass" `
+    "-File" `
+    (Join-Path $repoRoot "scripts\set-pe-icon.ps1") `
+    "-ExePath" `
+    (Join-Path $desktopDir "dist\win-unpacked\Dietrix.exe") `
+    "-IconPath" `
+    (Join-Path $desktopDir "build\icon.ico") `
+    "-ProductName" `
+    "Dietrix" `
+    "-ProductVersion" `
+    "1.0.0" `
+    "-FileDescription" `
+    "Dietrix" `
+    "-CompanyName" `
+    "Dietrix" `
+    "-OriginalFilename" `
+    "Dietrix.exe"
+
+Push-Location $desktopDir
+try {
+    $env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
+    Invoke-Checked "npm.cmd" "run" "dist:prepackaged"
+}
+finally {
+    Pop-Location
+}
 
 Write-Host "Installer build finished. Check desktop\dist."

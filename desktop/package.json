@@ -1,22 +1,24 @@
 {
-  "name": "smartrecipe-desktop",
+  "name": "dietrix-desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "SmartRecipe desktop shell",
+  "description": "Dietrix desktop shell",
+  "author": "Dietrix",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder --dir",
-    "dist:nsis": "electron-builder --win nsis"
+    "dist": "electron-builder --win nsis",
+    "dist:nsis": "electron-builder --win nsis",
+    "dist:prepackaged": "electron-builder --win nsis --prepackaged dist/win-unpacked"
   },
   "devDependencies": {
     "electron": "^33.4.11",
     "electron-builder": "^25.1.8"
   },
-    "build": {
+  "build": {
     "appId": "ru.smartrecipe.dietrix",
-    "productName": "SmartRecipe",
+    "productName": "Dietrix",
     "icon": "build/icon.ico",
     "directories": {
       "output": "dist"
@@ -49,14 +51,18 @@
     ],
     "win": {
       "icon": "build/icon.ico",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "${productName} Setup ${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "SmartRecipe"
+      "shortcutName": "Dietrix"
     }
   }
 }
