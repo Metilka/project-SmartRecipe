@@ -65,7 +65,7 @@ finally {
     Pop-Location
 }
 
-Invoke-Checked "powershell" "-NoProfile" "-ExecutionPolicy" "Bypass" "-File" (Join-Path $repoRoot "scripts\set-pe-icon.ps1") "-ExePath" (Join-Path $desktopDir "dist\win-unpacked\SmartRecipe.exe") "-IconPath" (Join-Path $desktopDir "build\icon.ico")
+Invoke-Checked "powershell" "-NoProfile" "-ExecutionPolicy" "Bypass" "-File" (Join-Path $repoRoot "scripts\set-pe-icon.ps1") "-ExePath" (Join-Path $desktopDir "dist\win-unpacked\Dietrix.exe") "-IconPath" (Join-Path $desktopDir "build\icon.ico")
 Invoke-Checked "powershell" "-NoProfile" "-ExecutionPolicy" "Bypass" "-File" (Join-Path $repoRoot "scripts\build-iexpress-installer.ps1")
 
 Write-Host "Installer build finished. Check desktop\dist."

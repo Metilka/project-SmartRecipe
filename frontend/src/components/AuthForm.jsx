@@ -6,7 +6,7 @@ const initialState = {
   password: '',
 };
 
-export default function AuthForm({ onLogin, onRegister }) {
+export default function AuthForm({ onLogin, onRegister, onContinueAsGuest }) {
   const [tab, setTab] = useState('login');
   const [formState, setFormState] = useState(initialState);
   const [submitting, setSubmitting] = useState(false);
@@ -128,15 +128,28 @@ export default function AuthForm({ onLogin, onRegister }) {
         {formSuccess && <div className="form-alert form-alert--success">{formSuccess}</div>}
         {formError && <div className="form-alert form-alert--error">{formError}</div>}
 
-        <button className="aero-button primary auth-submit" type="submit" disabled={submitting}>
-          {submitting ? (
-            <Loader inline label={tab === 'login' ? 'Входим…' : 'Создаём аккаунт…'} />
-          ) : tab === 'login' ? (
-            'Войти'
-          ) : (
-            'Зарегистрироваться'
+        <div className="auth-form__actions">
+          <button className="aero-button primary auth-submit" type="submit" disabled={submitting}>
+            {submitting ? (
+              <Loader inline label={tab === 'login' ? 'Входим…' : 'Создаём аккаунт…'} />
+            ) : tab === 'login' ? (
+              'Войти'
+            ) : (
+              'Зарегистрироваться'
+            )}
+          </button>
+
+          {onContinueAsGuest && (
+            <button
+              className="aero-button secondary auth-guest-return"
+              type="button"
+              onClick={onContinueAsGuest}
+              disabled={submitting}
+            >
+              Вернуться в гостевой режим
+            </button>
           )}
-        </button>
+        </div>
       </form>
     </div>
   );

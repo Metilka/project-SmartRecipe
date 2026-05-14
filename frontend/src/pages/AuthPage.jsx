@@ -22,5 +22,15 @@ export default function AuthPage() {
     await authApi.register(payload);
   };
 
-  return <AuthForm onLogin={handleLogin} onRegister={handleRegister} />;
+  const handleContinueAsGuest = () => {
+    navigate('/guest/diets');
+  };
+
+  return (
+    <AuthForm
+      onLogin={handleLogin}
+      onRegister={handleRegister}
+      onContinueAsGuest={handleContinueAsGuest}
+    />
+  );
 }

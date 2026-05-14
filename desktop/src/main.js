@@ -6,7 +6,7 @@ const path = require("path");
 const { spawn, spawnSync } = require("child_process");
 const { app, BrowserWindow, dialog } = require("electron");
 
-const PRODUCT_NAME = "SmartRecipe";
+const PRODUCT_NAME = "Dietrix";
 const POSTGRES_USER = "smartrecipe";
 const POSTGRES_DB = "med_diet_db";
 
@@ -642,7 +642,7 @@ if (!gotLock) {
   app.whenReady().then(() => {
     startApplication().catch((error) => {
       appendLog(`startup failed: ${error.stack || error.message}`);
-      dialog.showErrorBox("SmartRecipe startup failed", error.message);
+      dialog.showErrorBox("Dietrix startup failed", error.message);
       stopServicesSync();
       app.quit();
     });

@@ -36,7 +36,7 @@ export default function Header() {
       >
         <div className="header-brand__orb" />
         <div>
-          <strong>SmartRecipe</strong>
+          <strong>DIETRIX</strong>
           <span>Подбор рецептов по диетам</span>
         </div>
       </div>

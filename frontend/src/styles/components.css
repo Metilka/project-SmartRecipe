@@ -361,6 +361,20 @@
   margin-top: var(--space-2);
 }
 
+.auth-form__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.auth-form__actions .auth-submit {
+  margin-top: var(--space-2);
+}
+
+.auth-guest-return {
+  width: 100%;
+}
+
 .profile-form-grid {
   display: flex;
   flex-direction: column;
